@@ -1,8 +1,10 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+const dotenv = require('dotenv');
+const { connectDB } = require('./config/database');
 
+// Load env vars
+dotenv.config();
 
 const app = express();
 
@@ -12,8 +14,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Enable CORS
 app.use(cors({
-    origin: 'http://localhost:3000',
-    credentials: true
+  origin: 'http://localhost:3000',
+  credentials: true
 }));
 
 // Simple test route at root
@@ -26,65 +28,50 @@ app.get('/api/test', (req, res) => {
     res.json({ message: 'API test route is working!' });
 });
 
-
-// Import route modules
+// Import routes - FIXED PATHS
 const authRoutes = require('./modules/authentication/authRoutes');
 
-// Initialize express app
-//const app = express();
+// Use routes - Make sure this is after body parser
+app.use(`${process.env.API_VERSION}/auth`, authRoutes);
 
-
-// Request logging middleware (for debugging)
-app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-});
-
-// ============ ROUTES ============
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: 'Server is running',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV
-    });
-});
-
-// API version prefix
-const apiVersion = '/api/v1';
-
-// Authentication routes
-app.use(`${apiVersion}/auth`, authRoutes);
-
-// 404 handler for undefined routes - FIXED (removed '*')
+// 404 handler
 app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: `Cannot ${req.method} ${req.originalUrl} - Route not found`
+    res.status(404).json({ 
+        message: `Route ${req.method} ${req.originalUrl} not found`,
+       availableRoutes: [
+          'GET /',
+           'GET /api/test',
+           'POST /api/v1/auth/login',
+           'GET /api/v1/auth/me',
+           'POST /api/v1/auth/register'
+      ]
     });
 });
 
-// Global error handler
+// Error handler
 app.use((err, req, res, next) => {
-    console.error('Global error handler:', err);
-    res.status(500).json({
-        success: false,
-        message: 'An unexpected error occurred',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
+    console.error(err);
+    res.status(500).json({ message: 'Server error', error: err.message });
 });
-
-// ============ START SERVER ============
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-    console.log(`\n=================================`);
-    console.log(`🚀 Server is running on port ${PORT}`);
-    console.log(`📡 API available at http://localhost:${PORT}${apiVersion}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`✅ Auth routes mounted at ${apiVersion}/auth`);
-    console.log(`=================================\n`);
-});
+// Start server
+const startServer = async () => {
+    try {
+        await connectDB();
+        app.listen(PORT, () => {
+            console.log(`\n✅ Server running on http://localhost:${PORT}`);
+            console.log(`🔐 Login endpoint: POST http://localhost:${PORT}/api/auth/login\n`);
+        });
+    } catch (error) {
+        console.error('Database connection failed:', error);
+        // Start server even without database for testing
+        app.listen(PORT, () => {
+            console.log(`\n⚠️  Server running without database on http://localhost:${PORT}`);
+            console.log(`🔐 Login endpoint: POST http://localhost:${PORT}${process.env.API_VERSION}/auth/login`
+);
+        });
+    }
+};
+startServer();

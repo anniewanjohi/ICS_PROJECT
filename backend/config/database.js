@@ -1,75 +1,77 @@
 const sql = require('mssql');
 require('dotenv').config();
 
-console.log('📋 Loading database configuration...');
-console.log(`   DB_HOST: ${process.env.DB_HOST}`);
-console.log(`   DB_NAME: ${process.env.DB_NAME}`);
-console.log(`   Using Windows Auth: ${process.env.DB_TRUSTED_CONNECTION === 'true'}`);
+// Parse server and instance from DB_SERVER
+let serverName = process.env.DB_SERVER || 'localhost';
+let instanceName = null;
 
-const config = {
-    server: process.env.DB_HOST || 'localhost\\SQLEXPRESS',
+if (serverName.includes('\\')) {
+    const parts = serverName.split('\\');
+    serverName = parts[0];
+    instanceName = parts[1];
+}
+
+const dbConfig = {
+    server: serverName,
     database: process.env.DB_NAME || 'ICS_PROJECT',
-    port: parseInt(process.env.DB_PORT) || 1433,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
     options: {
-        encrypt: false,
-        trustServerCertificate: true,
+        encrypt: process.env.DB_ENCRYPT === 'true',
+        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
         enableArithAbort: true
     },
-    connectionTimeout: 30000,
-    requestTimeout: 30000
+    pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000
+    }
 };
 
-// Use Windows Authentication if specified
-if (process.env.DB_TRUSTED_CONNECTION === 'true') {
-    config.options.trustedConnection = true;
-    console.log('✅ Using Windows Authentication');
-} else {
-    // Use SQL Server Authentication
-    config.user = process.env.DB_USER;
-    config.password = process.env.DB_PASSWORD;
-    console.log('✅ Using SQL Server Authentication');
-    console.log(`   User: ${config.user}`);
+if (instanceName) {
+    dbConfig.options.instanceName = instanceName;
 }
 
 let pool = null;
 
-async function getConnection() {
+const connectDB = async () => {
     try {
-        if (pool && pool.connected) {
-            return pool;
-        }
+        console.log('🔄 Connecting to SQL Server...');
+        pool = await sql.connect(dbConfig);
+        console.log('✅ Connected to SQL Server Database');
         
-        console.log('\n🔄 Connecting to SQL Server...');
-        console.log(`   Server: ${config.server}`);
-        console.log(`   Database: ${config.database}`);
+        // Test connection
+        const result = await pool.request().query('SELECT GETDATE() as currentTime, DB_NAME() as databaseName');
+        console.log(`   Database: ${result.recordset[0].databaseName}`);
+        console.log(`   Server Time: ${result.recordset[0].currentTime}`);
         
-        pool = await sql.connect(config);
-        console.log('✅ Database connected successfully!\n');
         return pool;
-    } catch (error) {
-        console.error('\n❌ Database connection failed!');
-        console.error(`   Error: ${error.message}`);
-        console.error(`   Code: ${error.code || 'N/A'}`);
-        
-        // Helpful troubleshooting messages
-        if (error.message.includes('Login failed')) {
-            console.error('\n💡 Troubleshooting:');
-            console.error('   - Check your username and password');
-            console.error('   - Make sure the user has access to the database');
-        } else if (error.message.includes('Cannot find')) {
-            console.error('\n💡 Troubleshooting:');
-            console.error('   - Check the server name format');
-            console.error('   - Try using: localhost\\SQLEXPRESS');
-            console.error('   - Try using: .\\SQLEXPRESS');
-        } else if (error.message.includes('timeout')) {
-            console.error('\n💡 Troubleshooting:');
-            console.error('   - Make sure SQL Server is running');
-            console.error('   - Check if TCP/IP is enabled in SQL Server Configuration Manager');
-            console.error('   - Check if Windows Firewall is blocking port 1433');
-        }
-        
-        throw error;
+    } catch (err) {
+        console.error('❌ Database connection failed:', err.message);
+        throw err;
     }
-}
+};
 
-module.exports = { getConnection, sql };
+// Add getConnection function for your UserModel
+const getConnection = () => {
+    if (!pool) {
+        throw new Error('Database not connected. Call connectDB first.');
+    }
+    return pool;
+};
+
+const getPool = () => {
+    if (!pool) {
+        throw new Error('Database not connected. Call connectDB first.');
+    }
+    return pool;
+};
+
+const closeConnection = async () => {
+    if (pool) {
+        await pool.close();
+        console.log('Database connection closed');
+    }
+};
+
+module.exports = { connectDB, getConnection, getPool, closeConnection, sql };
