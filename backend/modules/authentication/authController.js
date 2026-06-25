@@ -2,66 +2,128 @@
 const UserModel = require('./userModel');
 const PasswordUtils = require('./passwordUtils');
 const JWTUtils = require('./jwtUtils');
+const { logAction } = require('../../utils/logger');
 
 class AuthController {
-    /**
-     * Handle user login
-     * POST /api/auth/login
-     * Body: { email, password }
-     */
+
+    // POST /api/v1/auth/register
+    static async register(req, res) {
+        try {
+            const { email, password, role, profileData } = req.body;
+
+            // Basic presence check
+            if (!email || !password) {
+                return res.status(400).json({ success: false, message: 'Email and password are required' });
+            }
+
+            // Must be a Strathmore email
+            if (!email.toLowerCase().endsWith('@strathmore.edu')) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'You must register with a valid Strathmore University email (@strathmore.edu)'
+                });
+            }
+
+            // Validate email format
+            const emailRegex = /^[^\s@]+@strathmore\.edu$/i;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({ success: false, message: 'Invalid email format' });
+            }
+
+            // Validate password strength
+            const passwordCheck = PasswordUtils.validatePasswordStrength(password);
+            if (!passwordCheck.isValid) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Password does not meet requirements',
+                    errors: passwordCheck.errors
+                });
+            }
+
+            // Block self-registration as admin
+            const requestedRole = role || 'student';
+            if (requestedRole === 'admin') {
+                return res.status(403).json({ success: false, message: 'Admin accounts cannot be self-registered' });
+            }
+
+            if (!['student', 'staff'].includes(requestedRole)) {
+                return res.status(400).json({ success: false, message: 'Role must be student or staff' });
+            }
+
+            // Check duplicate
+            const existing = await UserModel.findByEmail(email.toLowerCase());
+            if (existing) {
+                return res.status(409).json({ success: false, message: 'An account with this email already exists' });
+            }
+
+            // Hash password and create user
+            const passwordHash = await PasswordUtils.hashPassword(password);
+            const newUser = await UserModel.create(email.toLowerCase(), passwordHash, requestedRole);
+
+            // Create role-specific profile if profileData provided
+            let profile = null;
+            if (profileData) {
+                if (requestedRole === 'student') {
+                    profile = await UserModel.createStudentProfile(newUser.user_id, profileData);
+                } else if (requestedRole === 'staff') {
+                    profile = await UserModel.createStaffProfile(newUser.user_id, profileData);
+                }
+            }
+
+            // Log registration
+            await logAction(newUser.user_id, 'USER_REGISTERED', 'users', newUser.user_id, req);
+
+            const token = JWTUtils.generateToken(newUser);
+
+            return res.status(201).json({
+                success: true,
+                message: 'Registration successful',
+                data: {
+                    token,
+                    user: {
+                        id: newUser.user_id,
+                        email: newUser.email,
+                        role: newUser.role,
+                        profile
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error('Register error:', error);
+            return res.status(500).json({ success: false, message: 'Server error during registration' });
+        }
+    }
+
+    // POST /api/v1/auth/login
     static async login(req, res) {
         try {
             const { email, password } = req.body;
 
-            // Validate input
             if (!email || !password) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email and password are required'
-                });
+                return res.status(400).json({ success: false, message: 'Email and password are required' });
             }
 
-            // Find user by email
-            const user = await UserModel.findByEmail(email);
-            
+            const user = await UserModel.findByEmail(email.toLowerCase());
             if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Invalid email or password'
-                });
+                return res.status(401).json({ success: false, message: 'Invalid email or password' });
             }
 
-            // Check if user account is active
             if (!user.is_active) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Your account has been deactivated. Please contact administrator.'
-                });
+                return res.status(401).json({ success: false, message: 'Your account has been deactivated. Contact the administrator.' });
             }
 
-            // Verify password
-            const isPasswordValid = await PasswordUtils.comparePassword(
-                password, 
-                user.password_hash
-            );
-
-            if (!isPasswordValid) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Invalid email or password'
-                });
+            const passwordValid = await PasswordUtils.comparePassword(password, user.password_hash);
+            if (!passwordValid) {
+                return res.status(401).json({ success: false, message: 'Invalid email or password' });
             }
 
-            // Update last login timestamp
             await UserModel.updateLastLogin(user.user_id);
+            await logAction(user.user_id, 'USER_LOGIN', 'users', user.user_id, req);
 
-            // Generate JWT token
             const token = JWTUtils.generateToken(user);
-
-            // Get user with profile data
             const userWithProfile = await UserModel.getUserWithProfile(user.user_id);
 
-            // Return success response
             return res.status(200).json({
                 success: true,
                 message: 'Login successful',
@@ -78,187 +140,40 @@ class AuthController {
 
         } catch (error) {
             console.error('Login error:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'An internal server error occurred. Please try again later.'
-            });
+            return res.status(500).json({ success: false, message: 'Server error during login' });
         }
     }
 
-    /**
-     * Handle user registration (for new students/staff)
-     * POST /api/auth/register
-     * Body: { email, password, role, profileData }
-     */
-    static async register(req, res) {
+    // GET /api/v1/auth/me  (protected)
+    static async getMe(req, res) {
         try {
-            const { email, password, role, profileData } = req.body;
-
-            // Validate required fields
-            if (!email || !password) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email and password are required'
-                });
-            }
-
-            // Validate email format (basic)
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Please provide a valid email address'
-                });
-            }
-
-            // Validate password strength
-            const passwordValidation = PasswordUtils.validatePasswordStrength(password);
-            if (!passwordValidation.isValid) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Password does not meet security requirements',
-                    errors: passwordValidation.errors
-                });
-            }
-
-            // Check if user already exists
-            const existingUser = await UserModel.findByEmail(email);
-            if (existingUser) {
-                return res.status(409).json({
-                    success: false,
-                    message: 'A user with this email already exists'
-                });
-            }
-
-            // Hash the password
-            const hashedPassword = await PasswordUtils.hashPassword(password);
-
-            // Create user
-            const newUser = await UserModel.create(
-                email, 
-                hashedPassword, 
-                role || 'student'
-            );
-
-            // TODO: Create role-specific profile (student/staff)
-            // This will be implemented in the next phase
-
-            // Generate token for immediate login
-            const token = JWTUtils.generateToken(newUser);
-
-            return res.status(201).json({
-                success: true,
-                message: 'Registration successful',
-                data: {
-                    token,
-                    user: {
-                        id: newUser.user_id,
-                        email: newUser.email,
-                        role: newUser.role
-                    }
-                }
-            });
-
-        } catch (error) {
-            console.error('Registration error:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'An internal server error occurred. Please try again later.'
-            });
-        }
-    }
-
-    /**
-     * Verify current token and get user info
-     * GET /api/auth/verify
-     * Header: Authorization: Bearer <token>
-     */
-    static async verifyToken(req, res) {
-        try {
-            // The user is already attached to req by authMiddleware
-            const userId = req.user.userId;
-            
-            const userWithProfile = await UserModel.getUserWithProfile(userId);
-            
+            const userWithProfile = await UserModel.getUserWithProfile(req.user.userId);
             if (!userWithProfile) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'User not found'
-                });
+                return res.status(404).json({ success: false, message: 'User not found' });
             }
-
-            return res.status(200).json({
-                success: true,
-                data: {
-                    user: userWithProfile
-                }
-            });
-
+            return res.status(200).json({ success: true, data: { user: userWithProfile } });
         } catch (error) {
-            console.error('Token verification error:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'An internal server error occurred'
-            });
+            console.error('GetMe error:', error);
+            return res.status(500).json({ success: false, message: 'Server error' });
         }
     }
 
-    /**
-     * Logout (client-side token removal - no server action needed with JWT)
-     * POST /api/auth/logout
-     */
+    // POST /api/v1/auth/logout  (protected)
     static async logout(req, res) {
-        // With JWT, logout is handled client-side by removing the token
-        // This endpoint exists for consistency and potential future blacklisting
+        await logAction(req.user.userId, 'USER_LOGOUT', 'users', req.user.userId, req);
+        return res.status(200).json({ success: true, message: 'Logged out. Remove token on client side.' });
+    }
+
+    // POST /api/v1/auth/forgot-password
+    static async forgotPassword(req, res) {
+        // Always return same message to prevent email enumeration
         return res.status(200).json({
             success: true,
-            message: 'Logout successful. Please remove your token on client side.'
+            message: 'If an account exists with that email, you will receive reset instructions shortly.'
         });
-    }
-
-    /**
-     * Request password reset
-     * POST /api/auth/forgot-password
-     * Body: { email }
-     */
-    static async forgotPassword(req, res) {
-        try {
-            const { email } = req.body;
-
-            if (!email) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email is required'
-                });
-            }
-
-            const user = await UserModel.findByEmail(email);
-            
-            // For security, always return success even if email doesn't exist
-            // This prevents email enumeration attacks
-            if (!user) {
-                return res.status(200).json({
-                    success: true,
-                    message: 'If an account exists with that email, you will receive password reset instructions.'
-                });
-            }
-
-            // TODO: Generate reset token and send email
-            // This will be implemented in a future phase
-
-            return res.status(200).json({
-                success: true,
-                message: 'If an account exists with that email, you will receive password reset instructions.'
-            });
-
-        } catch (error) {
-            console.error('Forgot password error:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'An internal server error occurred'
-            });
-        }
+        // TODO: implement email sending in next phase
     }
 }
 
 module.exports = AuthController;
+

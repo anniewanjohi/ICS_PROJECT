@@ -157,9 +157,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
         setSuccess("Login successful! Redirecting...");
         
         setTimeout(() => {
-          if (onLoginSuccess) {
-            onLoginSuccess(result.data.user);
-          }
+          if (onLoginSuccess) { onLoginSuccess(result.data.user, result.data.token, loginForm.remember); }
           onClose();
         }, 1500);
       } else {
@@ -212,7 +210,12 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
           setLoginForm(prev => ({ ...prev, email: regForm.email }));
         }, 3000);
       } else {
-        setError(result.message || "Registration failed. Please try again.");
+        // FIX 1: Show individual password errors if they exist, otherwise show general message
+        if (result.errors && result.errors.length > 0) {
+          setError(result.errors.join(' · '));
+        } else {
+          setError(result.message || "Registration failed. Please try again.");
+        }
       }
     } catch (err) {
       console.error("Registration error:", err);
@@ -724,7 +727,12 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                           setErrors((prev) => ({ ...prev, password: validate.password(regForm.password) }));
                         }}
                         error={touched.password && !!errors.password}
-                        helperText={touched.password && errors.password}
+                        // FIX 2: Show requirements hint by default, error message when validation fails
+                        helperText={
+                          touched.password && errors.password
+                            ? errors.password
+                            : "Min. 8 chars, uppercase, lowercase, number, special character (!@#$...)"
+                        }
                         placeholder="Min. 8 characters"
                         sx={{
                           mb: 2,

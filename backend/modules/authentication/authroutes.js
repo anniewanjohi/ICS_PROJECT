@@ -12,7 +12,7 @@ router.post('/forgot-password', AuthController.forgotPassword);
 
 // Protected routes (authentication required)
 router.post('/logout', AuthMiddleware.protect, AuthController.logout);
-router.get('/verify', AuthMiddleware.protect, AuthController.verifyToken);
+router.get('/verify', AuthMiddleware.protect, AuthController.getMe);
 
 // Example of role-restricted route (commented for future use)
 // router.get('/admin-only', 
