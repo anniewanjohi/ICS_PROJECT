@@ -1,626 +1,283 @@
 // src/modules/authentication/landingPage.jsx
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, createContext, useContext } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import AuthModal from './AuthModal';
 
-// Theme Context
 const ThemeContext = createContext();
-
 export const useTheme = () => useContext(ThemeContext);
+export const ThemeProvider = ({ children }) => <ThemeContext.Provider value={{}}>{children}</ThemeContext.Provider>;
 
-export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
-    return savedTheme || 'light';
-  });
-
-  useEffect(() => {
-    localStorage.setItem('theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
-
-  return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  );
-};
-
-// Main Landing Page Component
 const LandingPage = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const { login, logout, isLoggedIn, user } = useAuth();
-  const { theme, toggleTheme } = useTheme();
 
-  // Scroll reveal animation
-  useEffect(() => {
-    const revealEls = document.querySelectorAll('.reveal');
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('in');
-          }
-        });
-      },
-      { threshold: 0.15 }
-    );
-    revealEls.forEach((el) => observer.observe(el));
-    return () => revealEls.forEach((el) => observer.unobserve(el));
-  }, []);
+  const handleLoginSuccess = (userData, token, remember) => login(userData, token, remember);
 
-  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-  const closeMenu = () => setIsMenuOpen(false);
+  const css = `
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: Inter, system-ui, sans-serif; background: #f8fafc; color: #1a2744; line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
-  const handleLoginSuccess = (userData, token, remember) => {
-    login(userData, token, remember);
-  };
+    .lp-nav { background: #1a2744; color: #fff; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
+    .lp-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: #fff; text-decoration: none; }
+    .lp-logo-mark { width: 30px; height: 30px; border-radius: 7px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #D9A653; flex-shrink: 0; }
+    .lp-nav-links { display: flex; align-items: center; gap: 4px; }
+    .lp-nav-link { background: transparent; border: none; color: rgba(255,255,255,0.75); padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; text-decoration: none; }
+    .lp-nav-link:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .lp-nav-right { display: flex; align-items: center; gap: 10px; }
+    .lp-sign-in { background: rgba(255,255,255,0.12); border: none; color: #fff; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .lp-sign-in:hover { background: rgba(255,255,255,0.2); }
+    .lp-cta-btn { background: #D9A653; color: #1a2744; border: none; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .lp-cta-btn:hover { background: #c8953d; }
+    .lp-user-wrap { display: flex; align-items: center; gap: 10px; }
+    .lp-user-av { width: 32px; height: 32px; border-radius: 50%; background: #D9A653; color: #1a2744; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+    .lp-sign-out { background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; }
 
-  const handleLogout = () => logout();
+    .lp-hero { background: #1a2744; color: #fff; padding: 72px 24px 80px; }
+    .lp-hero-inner { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1.1fr 1fr; gap: 60px; align-items: center; }
+    .lp-hero-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(217,166,83,0.15); border: 1px solid rgba(217,166,83,0.3); color: #D9A653; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 20px; }
+    .lp-hero h1 { font-size: clamp(2rem, 3.5vw, 3rem); font-weight: 800; line-height: 1.12; color: #fff; margin-bottom: 18px; letter-spacing: -0.02em; font-family: inherit; }
+    .lp-hero h1 em { font-style: italic; color: #D9A653; }
+    .lp-hero-lead { font-size: 1rem; color: rgba(255,255,255,0.65); max-width: 440px; margin-bottom: 32px; line-height: 1.7; }
+    .lp-hero-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 40px; }
+    .lp-btn-primary { background: #D9A653; color: #1a2744; border: none; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .lp-btn-primary:hover { background: #c8953d; }
+    .lp-btn-ghost { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+    .lp-btn-ghost:hover { background: rgba(255,255,255,0.18); }
+    .lp-hero-stats { display: flex; gap: 28px; }
+    .lp-stat strong { display: block; font-size: 1.5rem; font-weight: 800; color: #D9A653; }
+    .lp-stat span { font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.06em; }
+
+    .lp-kiosk { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 20px; }
+    .lp-kiosk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .lp-kiosk-title { font-size: 11px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: #D9A653; }
+    .lp-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); animation: lppulse 2.5s infinite; display: inline-block; }
+    @keyframes lppulse { 0%,100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.2); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0.08); } }
+    .lp-search-bar { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .lp-card { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+    .lp-card:last-child { margin-bottom: 0; }
+    .lp-av { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+    .lp-av-gold { background: #D9A653; color: #1a2744; }
+    .lp-av-blue { background: #5C7DA6; color: #fff; }
+    .lp-av-green { background: #7BA88A; color: #1a2744; }
+    .lp-card-info { flex: 1; min-width: 0; }
+    .lp-card-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 1px; }
+    .lp-card-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
+    .lp-badge { font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
+    .lp-badge-green { background: rgba(16,185,129,0.15); color: #34d399; }
+    .lp-badge-amber { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .lp-badge-gray { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.4); }
+
+    .lp-features { background: #fff; padding: 80px 24px; border-bottom: 1px solid #e2e8f0; }
+    .lp-features-inner { max-width: 1100px; margin: 0 auto; }
+    .lp-section-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #D9A653; margin-bottom: 8px; }
+    .lp-section-title { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 800; color: #1a2744; margin-bottom: 8px; letter-spacing: -0.01em; }
+    .lp-section-sub { font-size: 14px; color: #64748b; max-width: 520px; margin-bottom: 36px; }
+    .lp-feat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+    .lp-feat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 16px; transition: all 0.2s; }
+    .lp-feat-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(26,39,68,0.1); }
+    .lp-feat-icon { width: 36px; height: 36px; background: #1a2744; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; margin-bottom: 12px; }
+    .lp-feat-card h3 { font-size: 13px; font-weight: 700; color: #1a2744; margin-bottom: 6px; }
+    .lp-feat-card p { font-size: 13px; color: #64748b; line-height: 1.6; }
+
+    .lp-steps { padding: 80px 24px; background: #f8fafc; }
+    .lp-steps-inner { max-width: 1100px; margin: 0 auto; }
+    .lp-steps-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; margin-top: 36px; }
+    .lp-step { position: relative; }
+    .lp-step-num { width: 34px; height: 34px; background: #1a2744; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; margin-bottom: 12px; position: relative; z-index: 1; }
+    .lp-step h3 { font-size: 13px; font-weight: 700; color: #1a2744; margin-bottom: 5px; }
+    .lp-step p { font-size: 13px; color: #64748b; line-height: 1.6; }
+    .lp-step-line { position: absolute; top: 17px; left: 34px; right: -20px; height: 1px; background: #e2e8f0; }
+    .lp-step:last-child .lp-step-line { display: none; }
+
+    .lp-cta { background: #1a2744; padding: 72px 24px; text-align: center; }
+    .lp-cta h2 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 800; color: #fff; margin-bottom: 10px; letter-spacing: -0.01em; }
+    .lp-cta p { color: rgba(255,255,255,0.6); font-size: 14px; max-width: 400px; margin: 0 auto 24px; }
+    .lp-cta-btns { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+
+    .lp-footer { background: #fff; border-top: 1px solid #e2e8f0; padding: 40px 24px 24px; }
+    .lp-footer-inner { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 24px; margin-bottom: 20px; }
+    .lp-footer-brand p { color: #64748b; font-size: 13px; max-width: 240px; margin-top: 8px; line-height: 1.6; }
+    .lp-footer-links { display: flex; gap: 40px; flex-wrap: wrap; }
+    .lp-footer-col h4 { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 10px; }
+    .lp-footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .lp-footer-col a { color: #475569; text-decoration: none; font-size: 13px; }
+    .lp-footer-col a:hover { color: #1a2744; }
+    .lp-footer-bottom { border-top: 1px solid #e2e8f0; padding-top: 16px; max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #94a3b8; }
+
+    @media (max-width: 900px) {
+      .lp-hero-inner { grid-template-columns: 1fr; gap: 40px; }
+      .lp-feat-grid { grid-template-columns: repeat(2,1fr); }
+      .lp-steps-grid { grid-template-columns: repeat(2,1fr); }
+      .lp-step-line { display: none; }
+    }
+    @media (max-width: 640px) {
+      .lp-nav-links { display: none; }
+      .lp-feat-grid, .lp-steps-grid { grid-template-columns: 1fr; }
+    }
+  `;
 
   return (
-    <div className="landing-page">
-      <style>{`
-        :root {
-          --navy-deep: #0B2542;
-          --navy: #16345C;
-          --navy-soft: #22456f;
-          --gold: #D9A653;
-          --gold-deep: #B9852F;
-          --cream: #F6F2E9;
-          --paper: #FCFAF5;
-          --ink: #1B2330;
-          --slate: #6E7888;
-          --line: rgba(11, 37, 66, 0.10);
-          --green: #3E8E63;
-          --amber: #C8862E;
-          --radius: 14px;
-          --primary-main: #D9A653;
-          --primary-gradient: linear-gradient(135deg, #D9A653, #B9852F);
-          --primary-gradient-hover: linear-gradient(135deg, #B9852F, #D9A653);
-          --text-primary: #1B2330;
-          --text-secondary: #6E7888;
-          --bg-default: #F6F2E9;
-          --bg-paper: #FCFAF5;
-          --border-color: rgba(11, 37, 66, 0.10);
-          --error: #d32f2f;
-          --hover-bg: rgba(217, 166, 83, 0.1);
-        }
+    <div>
+      <style>{css}</style>
 
-        [data-theme="dark"] {
-          --navy-deep: #0a1628;
-          --navy: #0d1f3a;
-          --navy-soft: #16345C;
-          --cream: #121826;
-          --paper: #1a1f2e;
-          --ink: #E8EDF5;
-          --slate: #8B94A8;
-          --line: rgba(232, 237, 245, 0.12);
-          --text-primary: #E8EDF5;
-          --text-secondary: #8B94A8;
-          --bg-default: #121826;
-          --bg-paper: #1a1f2e;
-          --border-color: rgba(232, 237, 245, 0.12);
-          --hover-bg: rgba(217, 166, 83, 0.15);
-        }
+      <nav className="lp-nav">
+        <a href="#home" className="lp-logo">
+          <span className="lp-logo-mark">SD</span>
+          SU Directory
+        </a>
+        <div className="lp-nav-links">
+          {[['#features','Features'],['#how-it-works','How it works'],['#about','About']].map(([h,l]) => (
+            <a key={l} href={h} className="lp-nav-link">{l}</a>
+          ))}
+        </div>
+        <div className="lp-nav-right">
+          {isLoggedIn ? (
+            <div className="lp-user-wrap">
+              <div className="lp-user-av">{user?.email?.charAt(0).toUpperCase()}</div>
+              <button className="lp-sign-out" onClick={logout}>Sign out</button>
+            </div>
+          ) : (
+            <>
+              <button className="lp-sign-in" onClick={() => setAuthOpen(true)}>Sign in</button>
+              <button className="lp-cta-btn" onClick={() => setAuthOpen(true)}>Search directory</button>
+            </>
+          )}
+        </div>
+      </nav>
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
-
-        body {
-          font-family: 'Inter', sans-serif;
-          color: var(--ink);
-          background: var(--cream);
-          line-height: 1.6;
-          -webkit-font-smoothing: antialiased;
-        }
-
-        h1, h2, h3, h4 {
-          font-family: 'Fraunces', serif;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-          color: var(--navy-deep);
-        }
-
-        [data-theme="dark"] h1,
-        [data-theme="dark"] h2,
-        [data-theme="dark"] h3,
-        [data-theme="dark"] h4 { color: var(--ink); }
-
-        .eyebrow {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 0.74rem;
-          font-weight: 600;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: var(--gold-deep);
-          display: flex;
-          align-items: center;
-          gap: 0.6rem;
-          margin-bottom: 1rem;
-        }
-
-        .eyebrow::before {
-          content: "";
-          display: inline-block;
-          width: 22px;
-          height: 2px;
-          background: var(--gold-deep);
-        }
-
-        .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
-
-        .theme-toggle {
-          background: transparent;
-          border: 1px solid var(--line);
-          border-radius: 40px;
-          padding: 8px 12px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 0.85rem;
-          color: var(--ink);
-          transition: all 0.2s;
-        }
-        .theme-toggle:hover { border-color: var(--gold); background: rgba(217, 166, 83, 0.1); }
-
-        .user-menu { display: flex; align-items: center; gap: 12px; }
-
-        .user-avatar {
-          width: 38px; height: 38px;
-          border-radius: 50%;
-          background: var(--gold);
-          color: var(--navy-deep);
-          display: flex; align-items: center; justify-content: center;
-          font-weight: 600; font-size: 0.9rem;
-          cursor: pointer; transition: transform 0.2s;
-        }
-        .user-avatar:hover { transform: scale(1.05); }
-
-        .logout-btn {
-          background: transparent;
-          border: 1px solid var(--line);
-          border-radius: 8px;
-          padding: 6px 12px;
-          font-size: 0.8rem;
-          cursor: pointer;
-          color: var(--ink);
-          transition: all 0.2s;
-        }
-        .logout-btn:hover { border-color: var(--error); color: var(--error); }
-
-        .btn {
-          display: inline-flex; align-items: center; justify-content: center;
-          gap: 8px; padding: 13px 26px; border-radius: 999px;
-          font-weight: 600; font-size: 0.95rem; text-decoration: none;
-          border: 1px solid transparent; cursor: pointer;
-          transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s, color 0.2s;
-          white-space: nowrap;
-        }
-        .btn-primary { background: var(--gold); color: var(--navy-deep); box-shadow: 0 6px 18px -8px rgba(217, 166, 83, 0.7); }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -8px rgba(217, 166, 83, 0.8); }
-        .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-        .btn-ghost:hover { border-color: var(--gold); transform: translateY(-2px); }
-        .btn-small { padding: 9px 16px; font-size: 0.82rem; }
-
-        header {
-          position: sticky; top: 0; z-index: 50;
-          background: rgba(246, 242, 233, 0.85);
-          backdrop-filter: blur(10px);
-          border-bottom: 1px solid var(--line);
-        }
-        [data-theme="dark"] header { background: rgba(18, 24, 38, 0.85); }
-
-        nav {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 18px 24px; max-width: 1180px; margin: 0 auto;
-        }
-
-        .logo {
-          display: flex; align-items: center; gap: 10px;
-          font-family: 'Fraunces', serif; font-weight: 700; font-size: 1.15rem;
-          color: var(--navy-deep); text-decoration: none;
-        }
-        [data-theme="dark"] .logo { color: var(--ink); }
-
-        .logo-mark {
-          width: 34px; height: 34px; border-radius: 8px;
-          background: var(--navy-deep);
-          display: flex; align-items: center; justify-content: center;
-          color: var(--gold);
-          font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; font-weight: 600;
-          flex-shrink: 0;
-        }
-
-        .nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
-        .nav-links a { color: var(--navy); text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.2s; }
-        [data-theme="dark"] .nav-links a { color: var(--slate); }
-        .nav-links a:hover { color: var(--gold-deep); }
-
-        .nav-cta { display: flex; align-items: center; gap: 14px; }
-
-        .menu-toggle { display: none; background: none; border: none; cursor: pointer; padding: 6px; }
-        .menu-toggle span { display: block; width: 24px; height: 2px; background: var(--navy-deep); margin: 5px 0; transition: 0.25s; }
-
-        .hero { padding: 88px 0 96px; overflow: hidden; }
-        .hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 64px; align-items: center; }
-        .hero h1 { font-size: clamp(2.4rem, 4.4vw, 3.6rem); line-height: 1.1; margin-bottom: 22px; }
-        .hero h1 em { font-style: italic; color: var(--gold-deep); }
-        .hero p.lead { font-size: 1.08rem; color: var(--slate); max-width: 480px; margin-bottom: 34px; }
-        .hero-actions { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 36px; }
-        .hero-meta { display: flex; gap: 28px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; color: var(--slate); }
-        .hero-meta strong { color: var(--navy-deep); display: block; font-family: 'Fraunces', serif; font-size: 1.3rem; font-weight: 700; margin-bottom: 2px; }
-        [data-theme="dark"] .hero-meta strong { color: var(--gold); }
-
-        .kiosk {
-          background: var(--navy-deep); border-radius: 20px; padding: 26px;
-          color: var(--paper); box-shadow: 0 30px 60px -30px rgba(11, 37, 66, 0.55);
-          position: relative; isolation: isolate;
-        }
-        .kiosk::before {
-          content: ""; position: absolute; inset: 0; border-radius: 20px;
-          background: radial-gradient(120% 120% at 100% 0%, rgba(217, 166, 83, 0.18), transparent 60%);
-          pointer-events: none; z-index: -1;
-        }
-        .kiosk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-        .kiosk-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.22em; color: var(--gold); text-transform: uppercase; }
-        .kiosk-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(62, 142, 99, 0.18); animation: pulse 2.4s infinite; }
-
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 4px rgba(62, 142, 99, 0.18); }
-          50% { box-shadow: 0 0 0 7px rgba(62, 142, 99, 0.10); }
-        }
-
-        .kiosk-search {
-          display: flex; align-items: center; gap: 10px;
-          background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
-          border-radius: 10px; padding: 13px 16px; margin-bottom: 18px;
-          color: rgba(252,250,245,0.55); font-size: 0.9rem;
-        }
-        .kiosk-results { display: flex; flex-direction: column; gap: 10px; }
-        .result-row {
-          display: flex; align-items: center; gap: 14px;
-          background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 12px; padding: 14px; transition: background 0.2s, transform 0.2s;
-        }
-        .result-row:hover { background: rgba(255,255,255,0.08); transform: translateX(4px); }
-        .avatar { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Fraunces', serif; font-weight: 700; font-size: 1rem; flex-shrink: 0; }
-        .avatar.a1 { background: #D9A653; color: #0B2542; }
-        .avatar.a2 { background: #5C7DA6; color: #fff; }
-        .avatar.a3 { background: #7BA88A; color: #0B2542; }
-        .result-info { flex: 1; min-width: 0; }
-        .result-name { font-weight: 600; font-size: 0.92rem; margin-bottom: 2px; }
-        .result-sub { font-size: 0.78rem; color: rgba(252,250,245,0.55); }
-        .status { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.06em; padding: 5px 10px; border-radius: 999px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-        .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; }
-        .status.available { background: rgba(62,142,99,0.16); color: #9FD9B7; }
-        .status.available::before { background: var(--green); }
-        .status.busy { background: rgba(200,134,46,0.16); color: #F0C589; }
-        .status.busy::before { background: var(--amber); }
-        .status.away { background: rgba(255,255,255,0.08); color: rgba(252,250,245,0.5); }
-        .status.away::before { background: rgba(252,250,245,0.4); }
-
-        .features-bg { background: var(--paper); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-        .section-head { max-width: 640px; margin-bottom: 56px; }
-        .section-head h2 { font-size: clamp(1.9rem, 3vw, 2.6rem); line-height: 1.2; }
-        .section-head p { color: var(--slate); font-size: 1.02rem; margin-top: 14px; }
-        .feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-        .feature-card { background: var(--cream); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 24px; transition: transform 0.25s ease, box-shadow 0.25s ease; }
-        .feature-card:hover { transform: translateY(-6px); box-shadow: 0 18px 40px -24px rgba(11,37,66,0.35); }
-        .feature-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--navy-deep); color: var(--gold); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
-        .feature-card h3 { font-size: 1.08rem; margin-bottom: 8px; }
-        .feature-card p { font-size: 0.92rem; color: var(--slate); }
-
-        .steps { display: flex; flex-direction: column; }
-        .step { display: grid; grid-template-columns: 120px 1fr; gap: 32px; padding: 34px 0; border-top: 1px solid var(--line); align-items: center; }
-        .step:last-child { border-bottom: 1px solid var(--line); }
-        .step-number { font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; color: var(--gold-deep); letter-spacing: 0.1em; display: flex; align-items: center; gap: 14px; }
-        .step-number .num { font-family: 'Fraunces', serif; font-size: 2.6rem; font-weight: 700; color: var(--navy-deep); line-height: 1; }
-        [data-theme="dark"] .step-number .num { color: var(--gold); }
-        .step-content h3 { font-size: 1.18rem; margin-bottom: 6px; }
-        .step-content p { color: var(--slate); font-size: 0.95rem; max-width: 560px; }
-        .step-tag { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate); margin-bottom: 6px; display: block; }
-
-        .about { background: var(--navy-deep); color: var(--paper); border-radius: 24px; margin: 0 24px; padding: 72px 56px; }
-        .about-inner { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
-        .about .eyebrow { color: var(--gold); }
-        .about .eyebrow::before { background: var(--gold); }
-        .about h2 { color: var(--paper); font-size: clamp(1.9rem, 3vw, 2.5rem); margin-bottom: 18px; line-height: 1.2; }
-        .about p { color: rgba(252,250,245,0.72); font-size: 1rem; margin-bottom: 18px; }
-        .about-stats { display: flex; flex-direction: column; gap: 24px; }
-        .stat { border-top: 1px solid rgba(252,250,245,0.14); padding-top: 18px; }
-        .stat strong { font-family: 'Fraunces', serif; font-size: 2rem; display: block; color: var(--gold); margin-bottom: 4px; }
-        .stat span { font-size: 0.88rem; color: rgba(252,250,245,0.6); }
-
-        .cta-strip { text-align: center; padding: 100px 24px; }
-        .cta-strip h2 { font-size: clamp(2rem, 4vw, 2.8rem); max-width: 640px; margin: 0 auto 16px; line-height: 1.2; }
-        .cta-strip p { color: var(--slate); max-width: 480px; margin: 0 auto 32px; }
-        .cta-actions { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
-
-        footer { border-top: 1px solid var(--line); padding: 48px 0 36px; }
-        .footer-grid { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 32px; margin-bottom: 32px; }
-        .footer-brand p { color: var(--slate); font-size: 0.9rem; max-width: 280px; margin-top: 10px; }
-        .footer-links { display: flex; gap: 48px; flex-wrap: wrap; }
-        .footer-col h4 { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--slate); margin-bottom: 14px; font-weight: 600; }
-        .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-        .footer-col a { color: var(--navy); text-decoration: none; font-size: 0.92rem; }
-        [data-theme="dark"] .footer-col a { color: var(--slate); }
-        .footer-col a:hover { color: var(--gold-deep); }
-        .footer-bottom { border-top: 1px solid var(--line); padding-top: 24px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 0.82rem; color: var(--slate); }
-
-        .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
-        .reveal.in { opacity: 1; transform: translateY(0); }
-
-        section { padding: 96px 0; }
-
-        @media (max-width: 900px) {
-          .hero-grid { grid-template-columns: 1fr; gap: 48px; }
-          .feature-grid { grid-template-columns: repeat(2, 1fr); }
-          .about-inner { grid-template-columns: 1fr; gap: 40px; }
-          .about { padding: 48px 28px; }
-        }
-
-        @media (max-width: 680px) {
-          .nav-links { position: absolute; top: 100%; left: 0; right: 0; background: var(--paper); flex-direction: column; align-items: flex-start; padding: 24px; gap: 18px; border-bottom: 1px solid var(--line); display: none; }
-          .nav-links.open { display: flex; }
-          .menu-toggle { display: block; }
-          .nav-cta .btn-ghost { display: none; }
-          .feature-grid { grid-template-columns: 1fr; }
-          .step { grid-template-columns: 1fr; gap: 10px; }
-          .step-number { gap: 10px; }
-          .hero { padding: 56px 0 64px; }
-          section { padding: 64px 0; }
-          .about { margin: 0 16px; }
-          .footer-links { gap: 32px; }
-        }
-      `}</style>
-
-      {/* Header */}
-      <header>
-        <nav>
-          <a href="#home" className="logo">
-            <span className="logo-mark">SD</span>
-            Strathmore Directory
-          </a>
-          <ul className={`nav-links ${isMenuOpen ? 'open' : ''}`}>
-            <li><a href="#home" onClick={closeMenu}>Home</a></li>
-            <li><a href="#features" onClick={closeMenu}>Features</a></li>
-            <li><a href="#how-it-works" onClick={closeMenu}>How It Works</a></li>
-            <li><a href="#about" onClick={closeMenu}>About</a></li>
-          </ul>
-          <div className="nav-cta">
-            <button onClick={toggleTheme} className="theme-toggle">
-              {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
-            </button>
-            {isLoggedIn ? (
-              <div className="user-menu">
-                <div className="user-avatar" title={user?.email}>
-                  {user?.email?.charAt(0).toUpperCase() || 'U'}
-                </div>
-                <button onClick={handleLogout} className="logout-btn">Sign Out</button>
-              </div>
-            ) : (
-              <>
-                <button onClick={() => setAuthModalOpen(true)} className="btn btn-ghost btn-small">Sign in</button>
-                <button onClick={() => setAuthModalOpen(true)} className="btn btn-primary btn-small">Search directory</button>
-              </>
-            )}
-          </div>
-          <button className="menu-toggle" onClick={toggleMenu}>
-            <span></span><span></span><span></span>
-          </button>
-        </nav>
-      </header>
-
-      {/* Hero */}
-      <section className="hero" id="home">
-        <div className="wrap hero-grid">
-          <div className="reveal in">
-            <div className="eyebrow">Strathmore University · Madaraka Campus</div>
+      <section className="lp-hero" id="home">
+        <div className="lp-hero-inner">
+          <div>
+            <div className="lp-hero-badge">📍 Strathmore University · Madaraka, Nairobi</div>
             <h1>Stop wandering the halls for someone who <em>just</em> left.</h1>
-            <p className="lead">
-              One searchable directory for every lecturer, mentor, administrator and student
-              rep at Strathmore — with office locations, contact details, live availability,
-              and appointment booking, all from your browser.
-            </p>
-            <div className="hero-actions">
-              <button onClick={() => setAuthModalOpen(true)} className="btn btn-primary">Search the directory</button>
-              <a href="#features" className="btn btn-ghost">See how it works</a>
+            <p className="lp-hero-lead">One searchable directory for every lecturer, mentor, administrator and student rep — with live availability and appointment booking, right in your browser.</p>
+            <div className="lp-hero-btns">
+              <button className="lp-btn-primary" onClick={() => setAuthOpen(true)}>Search the directory</button>
+              <a href="#features" className="lp-btn-ghost">See how it works</a>
             </div>
-            <div className="hero-meta">
-              <div><strong>4</strong> personnel categories</div>
-              <div><strong>1</strong> campus-wide login</div>
-              <div><strong>0</strong> installs needed</div>
+            <div className="lp-hero-stats">
+              <div className="lp-stat"><strong>4</strong><span>categories</span></div>
+              <div className="lp-stat"><strong>1</strong><span>login</span></div>
+              <div className="lp-stat"><strong>0</strong><span>installs</span></div>
             </div>
           </div>
-
-          <div className="reveal in" style={{ transitionDelay: '0.1s' }}>
-            <div className="kiosk">
-              <div className="kiosk-head">
-                <span className="kiosk-title">Directory</span>
-                <span className="kiosk-dot" title="Live status"></span>
-              </div>
-              <div className="kiosk-search">🔍&nbsp; Try "Computer Science" or "Dr. Otieno"</div>
-              <div className="kiosk-results">
-                <div className="result-row">
-                  <div className="avatar a1">AO</div>
-                  <div className="result-info">
-                    <div className="result-name">Dr. A. Otieno</div>
-                    <div className="result-sub">Computer Science · Office 4-12</div>
-                  </div>
-                  <span className="status available">Available</span>
-                </div>
-                <div className="result-row">
-                  <div className="avatar a2">MW</div>
-                  <div className="result-info">
-                    <div className="result-name">M. Wanjiru</div>
-                    <div className="result-sub">Mentorship Office · Office 2-08</div>
-                  </div>
-                  <span className="status busy">In a meeting</span>
-                </div>
-                <div className="result-row">
-                  <div className="avatar a3">FK</div>
-                  <div className="result-info">
-                    <div className="result-name">F. Kamau</div>
-                    <div className="result-sub">Student Affairs · Office 1-03</div>
-                  </div>
-                  <span className="status away">Hours: 2–4pm</span>
-                </div>
-              </div>
+          <div className="lp-kiosk">
+            <div className="lp-kiosk-header">
+              <span className="lp-kiosk-title">Directory</span>
+              <span className="lp-dot" />
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="features-bg" id="features">
-        <div className="wrap">
-          <div className="section-head reveal">
-            <div className="eyebrow">What's inside</div>
-            <h2>Everything you need to find the right person, fast</h2>
-            <p>Built around the four groups students actually need to reach — lecturers, mentors, administrative staff, and student representatives.</p>
-          </div>
-          <div className="feature-grid">
+            <div className="lp-search-bar">🔍 Search name, department, role...</div>
             {[
-              { icon: '🔍', title: 'Search & filter', desc: 'Find anyone by name, department, unit or role — no more guessing which office to walk into.' },
-              { icon: '⏰', title: 'Live availability', desc: 'Every profile shows real-time status — in office, in a meeting, or on a break.' },
-              { icon: '📅', title: 'Book appointments', desc: 'Pick an open slot straight from a profile and get instant confirmation.' },
-              { icon: '👥', title: 'Staff & admin tools', desc: 'Staff keep their own profile and schedule up to date; admins manage everything.' }
-            ].map((feature, i) => (
-              <div key={i} className="feature-card reveal" style={{ transitionDelay: `${i * 0.05}s` }}>
-                <div className="feature-icon">{feature.icon}</div>
-                <h3>{feature.title}</h3>
-                <p>{feature.desc}</p>
+              { av: 'lp-av-gold', init: 'AO', name: 'Dr. A. Otieno', sub: 'Computer Science · Block C-412', badge: 'lp-badge-green', status: 'Available' },
+              { av: 'lp-av-blue', init: 'MW', name: 'M. Wanjiru', sub: 'Mentorship · Block A-208', badge: 'lp-badge-amber', status: 'In a meeting' },
+              { av: 'lp-av-green', init: 'FK', name: 'F. Kamau', sub: 'Student Affairs · Block A-103', badge: 'lp-badge-gray', status: 'Hours: 2–4 pm' },
+            ].map((c, i) => (
+              <div key={i} className="lp-card">
+                <div className={`lp-av ${c.av}`}>{c.init}</div>
+                <div className="lp-card-info">
+                  <div className="lp-card-name">{c.name}</div>
+                  <div className="lp-card-sub">{c.sub}</div>
+                </div>
+                <span className={`lp-badge ${c.badge}`}>{c.status}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works">
-        <div className="wrap">
-          <div className="section-head reveal">
-            <div className="eyebrow">Getting there</div>
-            <h2>From question to confirmed meeting in four steps</h2>
-            <p>The same flow whether you're chasing a transcript, finding your mentor, or trying to catch a lecturer.</p>
-          </div>
-          <div className="steps">
+      <section className="lp-features" id="features">
+        <div className="lp-features-inner">
+          <div className="lp-section-tag">What's inside</div>
+          <div className="lp-section-title">Everything you need to find the right person, fast</div>
+          <div className="lp-section-sub">Built around the four groups students actually need to reach — lecturers, mentors, administrative staff, and student representatives.</div>
+          <div className="lp-feat-grid">
             {[
-              { num: '01', tag: 'Sign in', title: 'Log in with your Strathmore account', desc: 'Students, staff and admins each land on a view built for them.' },
-              { num: '02', tag: 'Search', title: 'Search by name, department, unit or role', desc: "Type what you're looking for — the directory narrows it down instantly." },
-              { num: '03', tag: 'Check details', title: 'Open a profile to see office, contact and status', desc: 'Every profile shows where they sit, how to reach them, and their availability.' },
-              { num: '04', tag: 'Book', title: 'Reserve an open slot and get confirmation', desc: 'Choose a time, send the request, and receive confirmation — no walk-ins.' }
-            ].map((step, i) => (
-              <div key={i} className="step reveal" style={{ transitionDelay: `${i * 0.05}s` }}>
-                <div className="step-number"><span className="num">{step.num}</span></div>
-                <div className="step-content">
-                  <span className="step-tag">{step.tag}</span>
-                  <h3>{step.title}</h3>
-                  <p>{step.desc}</p>
-                </div>
+              { icon: '🔍', title: 'Search and filter', desc: 'Find anyone by name, department, unit or role. Results show availability at a glance.' },
+              { icon: '📅', title: 'Book appointments', desc: 'Pick an open slot from a profile, add a purpose, and submit. Staff confirm or decline.' },
+              { icon: '👤', title: 'Rich profiles', desc: 'Staff set their office, hours and specialisation. Students flag their rep roles.' },
+              { icon: '🔔', title: 'Notifications', desc: 'Get notified when bookings are confirmed, declined, or due — all in one inbox.' },
+            ].map((f, i) => (
+              <div key={i} className="lp-feat-card">
+                <div className="lp-feat-icon">{f.icon}</div>
+                <h3>{f.title}</h3>
+                <p>{f.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* About */}
-      <section id="about">
-        <div className="about reveal">
-          <div className="about-inner">
-            <div>
-              <div className="eyebrow">Why we built this</div>
-              <h2>For every student who's stood outside the wrong office</h2>
-              <p>At Strathmore, finding the right person has always meant piecing things together — a peer's tip, a WhatsApp group, an email that goes unanswered, or a walk across campus that ends with an empty office.</p>
-              <p>The Strathmore Directory brings lecturers, mentors, administrative staff and student representatives into one searchable platform — with the information students actually need.</p>
-              <p>It's a web app, so there's nothing to install — it works on any device with a browser and your Strathmore login.</p>
-            </div>
-            <div className="about-stats">
-              <div className="stat"><strong>1 platform</strong><span>Replaces office visits, peer referrals and scattered WhatsApp groups</span></div>
-              <div className="stat"><strong>Madaraka, Nairobi</strong><span>Built for Strathmore University's main campus</span></div>
-              <div className="stat"><strong>Students · Staff · Admins</strong><span>Three tailored views, one shared directory</span></div>
-            </div>
+      <section className="lp-steps" id="how-it-works">
+        <div className="lp-steps-inner">
+          <div className="lp-section-tag">Getting started</div>
+          <div className="lp-section-title">From question to confirmed meeting in four steps</div>
+          <div className="lp-section-sub">The same flow whether you're chasing a transcript, finding your mentor, or trying to catch a lecturer.</div>
+          <div className="lp-steps-grid">
+            {[
+              { n: '1', title: 'Sign in', desc: 'Log in with your Strathmore email. Students, staff and admins each get their own view.' },
+              { n: '2', title: 'Search', desc: 'Search by name, department or role. Filter by category. Results show availability.' },
+              { n: '3', title: 'View profile', desc: 'See office location, contact details, and open time slots.' },
+              { n: '4', title: 'Book', desc: 'Select a slot, add a purpose, and submit. You get notified of the outcome.' },
+            ].map((s, i) => (
+              <div key={i} className="lp-step">
+                <div className="lp-step-num">{s.n}</div>
+                {i < 3 && <div className="lp-step-line" />}
+                <h3>{s.title}</h3>
+                <p>{s.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="cta-strip">
-        <div className="wrap reveal">
-          <h2>Find them. See if they're in. Book your time.</h2>
-          <p>Sign in with your Strathmore account to start searching the directory.</p>
-          <div className="cta-actions">
-            <button onClick={() => setAuthModalOpen(true)} className="btn btn-primary">Sign in to the directory</button>
-            <a href="#features" className="btn btn-ghost">Explore features</a>
-          </div>
+      <section className="lp-cta" id="about">
+        <h2>Find them. See if they're in. Book your time.</h2>
+        <p>Sign in with your Strathmore account to start using the directory.</p>
+        <div className="lp-cta-btns">
+          <button className="lp-btn-primary" onClick={() => setAuthOpen(true)}>Sign in to the directory</button>
+          <a href="#features" className="lp-btn-ghost">Explore features</a>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer>
-        <div className="wrap">
-          <div className="footer-grid">
-            <div className="footer-brand">
-              <a href="#home" className="logo">
-                <span className="logo-mark">SD</span>
-                Strathmore Directory
-              </a>
-              <p>A centralized, searchable directory and appointment platform for Strathmore University students, staff and administrators.</p>
+      <footer className="lp-footer">
+        <div className="lp-footer-inner">
+          <div className="lp-footer-brand">
+            <a href="#home" className="lp-logo" style={{ color: '#1a2744' }}>
+              <span className="lp-logo-mark">SD</span>
+              SU Directory
+            </a>
+            <p>A centralised directory and appointment platform for Strathmore University.</p>
+          </div>
+          <div className="lp-footer-links">
+            <div className="lp-footer-col">
+              <h4>Navigate</h4>
+              <ul>
+                {[['#home','Home'],['#features','Features'],['#how-it-works','How it works'],['#about','About']].map(([h,l]) => (
+                  <li key={l}><a href={h}>{l}</a></li>
+                ))}
+              </ul>
             </div>
-            <div className="footer-links">
-              <div className="footer-col">
-                <h4>Navigate</h4>
-                <ul>
-                  <li><a href="#home">Home</a></li>
-                  <li><a href="#features">Features</a></li>
-                  <li><a href="#how-it-works">How it works</a></li>
-                  <li><a href="#about">About</a></li>
-                </ul>
-              </div>
-              <div className="footer-col">
-                <h4>For staff</h4>
-                <ul>
-                  <li><a href="#">Manage your profile</a></li>
-                  <li><a href="#">Set availability</a></li>
-                  <li><a href="#">View appointment requests</a></li>
-                </ul>
-              </div>
-              <div className="footer-col">
-                <h4>Campus</h4>
-                <ul>
-                  <li><a href="#">Ole Sangale Road, Madaraka</a></li>
-                  <li><a href="#">Nairobi, Kenya</a></li>
-                </ul>
-              </div>
+            <div className="lp-footer-col">
+              <h4>Campus</h4>
+              <ul>
+                <li><a href="#">Ole Sangale Road, Madaraka</a></li>
+                <li><a href="#">Nairobi, Kenya</a></li>
+              </ul>
             </div>
           </div>
-          <div className="footer-bottom">
-            <span>© 2026 Strathmore Directory · ICS Project, School of Computing and Engineering Sciences</span>
-            <span>Built with React, Node.js &amp; Express</span>
-          </div>
+        </div>
+        <div className="lp-footer-bottom">
+          <span>© 2026 Strathmore Directory · ICS Project, SCES</span>
+          <span>React · Node.js · SQL Server</span>
         </div>
       </footer>
 
-      <AuthModal
-        open={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        onLoginSuccess={handleLoginSuccess}
-      />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} onLoginSuccess={handleLoginSuccess} />
     </div>
   );
 };
 
 export default function App() {
-  return (
-    <ThemeProvider>
-      <LandingPage />
-    </ThemeProvider>
-  );
+  return <ThemeProvider><LandingPage /></ThemeProvider>;
 }

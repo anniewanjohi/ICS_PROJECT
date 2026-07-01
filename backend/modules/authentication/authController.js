@@ -6,17 +6,14 @@ const { logAction } = require('../../utils/logger');
 
 class AuthController {
 
-    // POST /api/v1/auth/register
     static async register(req, res) {
         try {
             const { email, password, role, profileData } = req.body;
 
-            // Basic presence check
             if (!email || !password) {
                 return res.status(400).json({ success: false, message: 'Email and password are required' });
             }
 
-            // Must be a Strathmore email
             if (!email.toLowerCase().endsWith('@strathmore.edu')) {
                 return res.status(400).json({
                     success: false,
@@ -24,13 +21,11 @@ class AuthController {
                 });
             }
 
-            // Validate email format
             const emailRegex = /^[^\s@]+@strathmore\.edu$/i;
             if (!emailRegex.test(email)) {
                 return res.status(400).json({ success: false, message: 'Invalid email format' });
             }
 
-            // Validate password strength
             const passwordCheck = PasswordUtils.validatePasswordStrength(password);
             if (!passwordCheck.isValid) {
                 return res.status(400).json({
@@ -40,7 +35,6 @@ class AuthController {
                 });
             }
 
-            // Block self-registration as admin
             const requestedRole = role || 'student';
             if (requestedRole === 'admin') {
                 return res.status(403).json({ success: false, message: 'Admin accounts cannot be self-registered' });
@@ -50,27 +44,50 @@ class AuthController {
                 return res.status(400).json({ success: false, message: 'Role must be student or staff' });
             }
 
-            // Check duplicate
             const existing = await UserModel.findByEmail(email.toLowerCase());
             if (existing) {
                 return res.status(409).json({ success: false, message: 'An account with this email already exists' });
             }
 
-            // Hash password and create user
             const passwordHash = await PasswordUtils.hashPassword(password);
             const newUser = await UserModel.create(email.toLowerCase(), passwordHash, requestedRole);
 
-            // Create role-specific profile if profileData provided
+            // Derive name from email e.g. jane.doe@strathmore.edu -> Jane Doe
+            const emailLocalPart = email.split('@')[0];
+            const emailParts = emailLocalPart.split('.');
+            const derivedFirstName = profileData?.firstName ||
+                (emailParts[0] ? emailParts[0].charAt(0).toUpperCase() + emailParts[0].slice(1) : 'User');
+            const derivedLastName = profileData?.lastName ||
+                (emailParts[1] ? emailParts[1].charAt(0).toUpperCase() + emailParts[1].slice(1) : '');
+
             let profile = null;
-            if (profileData) {
+            try {
                 if (requestedRole === 'student') {
-                    profile = await UserModel.createStudentProfile(newUser.user_id, profileData);
+                    profile = await UserModel.createStudentProfile(newUser.user_id, {
+                        firstName: derivedFirstName,
+                        lastName: derivedLastName,
+                        studentRegNo: profileData?.studentRegNo || `STU-${newUser.user_id}-${Date.now().toString().slice(-5)}`,
+                        program: profileData?.program || 'Not specified',
+                        yearOfStudy: profileData?.yearOfStudy || null,
+                        department: profileData?.department || null,
+                    });
                 } else if (requestedRole === 'staff') {
-                    profile = await UserModel.createStaffProfile(newUser.user_id, profileData);
+                    profile = await UserModel.createStaffProfile(newUser.user_id, {
+                        firstName: derivedFirstName,
+                        lastName: derivedLastName,
+                        staffNumber: profileData?.staffNumber || `STAFF-${newUser.user_id}-${Date.now().toString().slice(-5)}`,
+                        staffType: profileData?.staffType || 'lecturer',
+                        departmentId: profileData?.departmentId || null,
+                        title: profileData?.title || null,
+                        position: profileData?.position || null,
+                        officeLocation: profileData?.officeLocation || null,
+                        officialEmail: email.toLowerCase(),
+                    });
                 }
+            } catch (profileError) {
+                console.error('Profile creation error (non-fatal):', profileError.message);
             }
 
-            // Log registration
             await logAction(newUser.user_id, 'USER_REGISTERED', 'users', newUser.user_id, req);
 
             const token = JWTUtils.generateToken(newUser);
@@ -95,7 +112,6 @@ class AuthController {
         }
     }
 
-    // POST /api/v1/auth/login
     static async login(req, res) {
         try {
             const { email, password } = req.body;
@@ -144,7 +160,6 @@ class AuthController {
         }
     }
 
-    // GET /api/v1/auth/me  (protected)
     static async getMe(req, res) {
         try {
             const userWithProfile = await UserModel.getUserWithProfile(req.user.userId);
@@ -158,22 +173,17 @@ class AuthController {
         }
     }
 
-    // POST /api/v1/auth/logout  (protected)
     static async logout(req, res) {
         await logAction(req.user.userId, 'USER_LOGOUT', 'users', req.user.userId, req);
         return res.status(200).json({ success: true, message: 'Logged out. Remove token on client side.' });
     }
 
-    // POST /api/v1/auth/forgot-password
     static async forgotPassword(req, res) {
-        // Always return same message to prevent email enumeration
         return res.status(200).json({
             success: true,
             message: 'If an account exists with that email, you will receive reset instructions shortly.'
         });
-        // TODO: implement email sending in next phase
     }
 }
 
 module.exports = AuthController;
-

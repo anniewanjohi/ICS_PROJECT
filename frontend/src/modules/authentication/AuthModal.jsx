@@ -304,10 +304,10 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
           <Paper
             elevation={24}
             sx={{
-              background: "var(--bg-paper)",
-              borderRadius: "var(--radius-2xl)",
+              background: "#fff",
+              borderRadius: "16px",
               overflow: "hidden",
-              border: "1px solid var(--border-color)",
+              border: "1px solid #e2e8f0",
               position: "relative",
             }}
           >
@@ -318,10 +318,10 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                 top: 12,
                 right: 12,
                 zIndex: 1,
-                color: "var(--text-secondary)",
+                color: "#64748b",
                 "&:hover": {
-                  background: "var(--hover-bg)",
-                  color: "var(--text-primary)",
+                  background: "rgba(217,166,83,0.1)",
+                  color: "#1a2744",
                 },
               }}
             >
@@ -333,8 +333,8 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                 sx={{
                   width: 56,
                   height: 56,
-                  borderRadius: "var(--radius-lg)",
-                  background: "var(--primary-gradient)",
+                  borderRadius: "10px",
+                  background: "#D9A653",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -348,7 +348,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                   fontFamily: '"Fraunces", serif',
                   fontWeight: 800,
                   fontSize: "1.5rem",
-                  color: "var(--text-primary)",
+                  color: "#1a2744",
                   letterSpacing: "-0.02em",
                 }}
               >
@@ -357,7 +357,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
               <Typography
                 sx={{
                   fontSize: "0.75rem",
-                  color: "var(--text-secondary)",
+                  color: "#64748b",
                   mt: 0.5,
                 }}
               >
@@ -370,19 +370,19 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
               onChange={handleTabChange}
               variant="fullWidth"
               sx={{
-                borderBottom: "1px solid var(--border-color)",
+                borderBottom: "1px solid #e2e8f0",
                 "& .MuiTab-root": {
                   py: 1.5,
                   fontSize: "0.875rem",
                   fontWeight: 600,
                   textTransform: "none",
-                  color: "var(--text-secondary)",
+                  color: "#64748b",
                   "&.Mui-selected": {
-                    color: "var(--primary-main)",
+                    color: "#D9A653",
                   },
                 },
                 "& .MuiTabs-indicator": {
-                  backgroundColor: "var(--primary-main)",
+                  backgroundColor: "#D9A653",
                   height: 3,
                 },
               }}
@@ -397,7 +397,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                   severity="error"
                   sx={{
                     mb: 3,
-                    borderRadius: "var(--radius-md)",
+                    borderRadius: "8px",
                   }}
                   onClose={() => setError("")}
                 >
@@ -426,13 +426,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                     sx={{
                       fontSize: "1.1rem",
                       fontWeight: 700,
-                      color: "var(--text-primary)",
+                      color: "#1a2744",
                       mb: 1,
                     }}
                   >
                     {tabValue === 0 ? "Welcome Back!" : "Account Created!"}
                   </Typography>
-                  <Typography sx={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+                  <Typography sx={{ fontSize: "0.875rem", color: "#64748b" }}>
                     {success}
                   </Typography>
                   {tabValue === 1 && (
@@ -441,10 +441,10 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                       onClick={() => setTabValue(0)}
                       sx={{
                         mt: 3,
-                        background: "var(--primary-gradient)",
+                        background: "#D9A653",
                         color: "white",
-                        "&:hover": { background: "var(--primary-gradient-hover)" },
-                        borderRadius: "var(--radius-md)",
+                        "&:hover": { background: "#c8953d" },
+                        borderRadius: "8px",
                         px: 3,
                       }}
                     >
@@ -473,13 +473,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         sx={{
                           mb: 3,
                           "& .MuiOutlinedInput-root": {
-                            borderRadius: "var(--radius-md)",
+                            borderRadius: "8px",
                           },
                         }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Email sx={{ color: "var(--text-secondary)", fontSize: 20 }} />
+                              <Email sx={{ color: "#64748b", fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -498,13 +498,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         sx={{
                           mb: 2,
                           "& .MuiOutlinedInput-root": {
-                            borderRadius: "var(--radius-md)",
+                            borderRadius: "8px",
                           },
                         }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Lock sx={{ color: "var(--text-secondary)", fontSize: 20 }} />
+                              <Lock sx={{ color: "#64748b", fontSize: 20 }} />
                             </InputAdornment>
                           ),
                           endAdornment: (
@@ -533,13 +533,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                               checked={loginForm.remember}
                               onChange={(e) => setLoginForm((prev) => ({ ...prev, remember: e.target.checked }))}
                               sx={{
-                                color: "var(--primary-main)",
-                                "&.Mui-checked": { color: "var(--primary-main)" },
+                                color: "#D9A653",
+                                "&.Mui-checked": { color: "#D9A653" },
                               }}
                             />
                           }
                           label={
-                            <Typography sx={{ fontSize: "0.813rem", color: "var(--text-secondary)" }}>
+                            <Typography sx={{ fontSize: "0.813rem", color: "#64748b" }}>
                               Remember me
                             </Typography>
                           }
@@ -548,7 +548,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                           onClick={handleForgotPassword}
                           sx={{
                             fontSize: "0.813rem",
-                            color: "var(--primary-main)",
+                            color: "#D9A653",
                             textTransform: "none",
                             fontWeight: 500,
                             "&:hover": { background: "transparent", textDecoration: "underline" },
@@ -564,13 +564,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         variant="contained"
                         disabled={loading}
                         sx={{
-                          background: "var(--primary-gradient)",
+                          background: "#D9A653",
                           color: "white",
                           py: 1.5,
-                          borderRadius: "var(--radius-md)",
+                          borderRadius: "8px",
                           fontSize: "0.9375rem",
                           fontWeight: 600,
-                          "&:hover": { background: "var(--primary-gradient-hover)" },
+                          "&:hover": { background: "#c8953d" },
                           "&:disabled": { opacity: 0.7 },
                         }}
                       >
@@ -578,7 +578,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                       </Button>
 
                       <Divider sx={{ my: 3 }}>
-                        <Typography sx={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                        <Typography sx={{ fontSize: "0.75rem", color: "#64748b" }}>
                           Demo Credentials
                         </Typography>
                       </Divider>
@@ -597,9 +597,9 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                           onClick={() => fillDemoCredentials("student")}
                           sx={{
                             flex: 1,
-                            borderColor: "var(--border-color)",
-                            color: "var(--text-primary)",
-                            "&:hover": { borderColor: "var(--gold)" },
+                            borderColor: "#e2e8f0",
+                            color: "#1a2744",
+                            "&:hover": { borderColor: "#D9A653" },
                           }}
                         >
                           Student Demo
@@ -610,9 +610,9 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                           onClick={() => fillDemoCredentials("staff")}
                           sx={{
                             flex: 1,
-                            borderColor: "var(--border-color)",
-                            color: "var(--text-primary)",
-                            "&:hover": { borderColor: "var(--gold)" },
+                            borderColor: "#e2e8f0",
+                            color: "#1a2744",
+                            "&:hover": { borderColor: "#D9A653" },
                           }}
                         >
                           Staff Demo
@@ -623,9 +623,9 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                           onClick={() => fillDemoCredentials("admin")}
                           sx={{
                             flex: 1,
-                            borderColor: "var(--border-color)",
-                            color: "var(--text-primary)",
-                            "&:hover": { borderColor: "var(--gold)" },
+                            borderColor: "#e2e8f0",
+                            color: "#1a2744",
+                            "&:hover": { borderColor: "#D9A653" },
                           }}
                         >
                           Admin Demo
@@ -652,13 +652,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         sx={{
                           mb: 3,
                           "& .MuiOutlinedInput-root": {
-                            borderRadius: "var(--radius-md)",
+                            borderRadius: "8px",
                           },
                         }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Person sx={{ color: "var(--text-secondary)", fontSize: 20 }} />
+                              <Person sx={{ color: "#64748b", fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -680,13 +680,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         sx={{
                           mb: 3,
                           "& .MuiOutlinedInput-root": {
-                            borderRadius: "var(--radius-md)",
+                            borderRadius: "8px",
                           },
                         }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Email sx={{ color: "var(--text-secondary)", fontSize: 20 }} />
+                              <Email sx={{ color: "#64748b", fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -701,13 +701,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         sx={{
                           mb: 3,
                           "& .MuiOutlinedInput-root": {
-                            borderRadius: "var(--radius-md)",
+                            borderRadius: "8px",
                           },
                         }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Person sx={{ color: "var(--text-secondary)", fontSize: 20 }} />
+                              <Person sx={{ color: "#64748b", fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -737,13 +737,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         sx={{
                           mb: 2,
                           "& .MuiOutlinedInput-root": {
-                            borderRadius: "var(--radius-md)",
+                            borderRadius: "8px",
                           },
                         }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Lock sx={{ color: "var(--text-secondary)", fontSize: 20 }} />
+                              <Lock sx={{ color: "#64748b", fontSize: 20 }} />
                             </InputAdornment>
                           ),
                           endAdornment: (
@@ -766,13 +766,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                                   flex: 1,
                                   height: 3,
                                   borderRadius: "2px",
-                                  background: i <= passwordStrength ? strengthColors[passwordStrength] : "var(--border-color)",
+                                  background: i <= passwordStrength ? strengthColors[passwordStrength] : "#e2e8f0",
                                   transition: "background 0.3s",
                                 }}
                               />
                             ))}
                           </Box>
-                          <Typography sx={{ fontSize: "0.7rem", color: strengthColors[passwordStrength] || "var(--text-secondary)" }}>
+                          <Typography sx={{ fontSize: "0.7rem", color: strengthColors[passwordStrength] || "#64748b" }}>
                             {strengthLabels[passwordStrength]} password
                           </Typography>
                         </Box>
@@ -797,13 +797,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         sx={{
                           mb: 3,
                           "& .MuiOutlinedInput-root": {
-                            borderRadius: "var(--radius-md)",
+                            borderRadius: "8px",
                           },
                         }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Lock sx={{ color: "var(--text-secondary)", fontSize: 20 }} />
+                              <Lock sx={{ color: "#64748b", fontSize: 20 }} />
                             </InputAdornment>
                           ),
                           endAdornment: (
@@ -822,13 +822,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         variant="contained"
                         disabled={loading}
                         sx={{
-                          background: "var(--primary-gradient)",
+                          background: "#D9A653",
                           color: "white",
                           py: 1.5,
-                          borderRadius: "var(--radius-md)",
+                          borderRadius: "8px",
                           fontSize: "0.9375rem",
                           fontWeight: 600,
-                          "&:hover": { background: "var(--primary-gradient-hover)" },
+                          "&:hover": { background: "#c8953d" },
                           "&:disabled": { opacity: 0.7 },
                         }}
                       >
@@ -838,7 +838,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                       <Typography
                         sx={{
                           fontSize: "0.7rem",
-                          color: "var(--text-secondary)",
+                          color: "#64748b",
                           textAlign: "center",
                           mt: 2,
                         }}

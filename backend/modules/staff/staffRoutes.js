@@ -7,7 +7,7 @@ const { logAction } = require('../../utils/logger');
 const router = express.Router();
 router.use(AuthMiddleware.protect);
 
-// GET /api/v1/staff/profile  — staff gets own profile
+// GET /api/v1/staff/profile
 router.get('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
         const pool = getPool();
@@ -15,8 +15,8 @@ router.get('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) => {
             .input('user_id', sql.Int, req.user.userId)
             .query(`
                 SELECT sp.*, d.department_name, d.faculty
-                FROM staff_profiles sp
-                LEFT JOIN departments d ON sp.department_id = d.department_id
+                FROM dbo.staff_profiles sp
+                LEFT JOIN dbo.departments d ON sp.department_id = d.department_id
                 WHERE sp.user_id = @user_id
             `);
         if (!result.recordset[0]) {
@@ -24,19 +24,26 @@ router.get('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) => {
         }
         return res.status(200).json({ success: true, data: { profile: result.recordset[0] } });
     } catch (error) {
+        console.error(error);
         return res.status(500).json({ success: false, message: 'Error fetching profile' });
     }
 });
 
-// PATCH /api/v1/staff/profile  — staff updates their own profile
+// PATCH /api/v1/staff/profile
 router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
-        const { title, position, officeLocation, officeHours, officialEmail,
-                areasOfSpecialization, biography, isAvailableForBooking, departmentId } = req.body;
+        const {
+            title, position, officeLocation, officeHours, officialEmail,
+            areasOfSpecialization, biography, isAvailableForBooking,
+            departmentId, staffType, isMentor, phoneExtension,
+            firstName, lastName
+        } = req.body;
 
         const pool = getPool();
         await pool.request()
             .input('user_id', sql.Int, req.user.userId)
+            .input('first_name', sql.VarChar, firstName || null)
+            .input('last_name', sql.VarChar, lastName || null)
             .input('title', sql.VarChar, title || null)
             .input('position', sql.VarChar, position || null)
             .input('office_location', sql.Text, officeLocation || null)
@@ -46,8 +53,13 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
             .input('biography', sql.Text, biography || null)
             .input('is_available_for_booking', sql.Bit, isAvailableForBooking !== undefined ? (isAvailableForBooking ? 1 : 0) : null)
             .input('department_id', sql.Int, departmentId || null)
+            .input('staff_type', sql.VarChar, staffType || null)
+            .input('is_mentor', sql.Bit, isMentor !== undefined ? (isMentor ? 1 : 0) : null)
+            .input('phone_extension', sql.VarChar, phoneExtension || null)
             .query(`
-                UPDATE staff_profiles SET
+                UPDATE dbo.staff_profiles SET
+                    first_name = COALESCE(@first_name, first_name),
+                    last_name = COALESCE(@last_name, last_name),
                     title = COALESCE(@title, title),
                     position = COALESCE(@position, position),
                     office_location = COALESCE(@office_location, office_location),
@@ -57,6 +69,9 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
                     biography = COALESCE(@biography, biography),
                     is_available_for_booking = COALESCE(@is_available_for_booking, is_available_for_booking),
                     department_id = COALESCE(@department_id, department_id),
+                    staff_type = COALESCE(@staff_type, staff_type),
+                    is_mentor = COALESCE(@is_mentor, is_mentor),
+                    phone_extension = COALESCE(@phone_extension, phone_extension),
                     updated_at = GETDATE()
                 WHERE user_id = @user_id
             `);
@@ -69,22 +84,21 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
     }
 });
 
-// GET /api/v1/staff/availability  — staff views own slots
+// GET /api/v1/staff/availability
 router.get('/availability', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
         const pool = getPool();
         const staffResult = await pool.request()
             .input('user_id', sql.Int, req.user.userId)
-            .query('SELECT staff_id FROM staff_profiles WHERE user_id = @user_id');
+            .query('SELECT staff_id FROM dbo.staff_profiles WHERE user_id = @user_id');
 
         if (!staffResult.recordset[0]) {
             return res.status(404).json({ success: false, message: 'Staff profile not found' });
         }
 
-        const staffId = staffResult.recordset[0].staff_id;
         const result = await pool.request()
-            .input('staff_id', sql.Int, staffId)
-            .query('SELECT * FROM availability_slots WHERE staff_id = @staff_id ORDER BY day_of_week, start_time');
+            .input('staff_id', sql.Int, staffResult.recordset[0].staff_id)
+            .query('SELECT * FROM dbo.availability_slots WHERE staff_id = @staff_id ORDER BY day_of_week, start_time');
 
         return res.status(200).json({ success: true, data: { slots: result.recordset } });
     } catch (error) {
@@ -92,7 +106,7 @@ router.get('/availability', AuthMiddleware.restrictTo('staff'), async (req, res)
     }
 });
 
-// POST /api/v1/staff/availability  — add a slot (recurring or specific date)
+// POST /api/v1/staff/availability
 router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
         const { dayOfWeek, startTime, endTime, slotDuration, location, isRecurring, specificDate } = req.body;
@@ -100,28 +114,24 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
         if (!startTime || !endTime) {
             return res.status(400).json({ success: false, message: 'startTime and endTime are required' });
         }
-
         if (isRecurring && !dayOfWeek) {
-            return res.status(400).json({ success: false, message: 'dayOfWeek is required for recurring slots' });
+            return res.status(400).json({ success: false, message: 'dayOfWeek required for recurring slots' });
         }
-
         if (!isRecurring && !specificDate) {
-            return res.status(400).json({ success: false, message: 'specificDate is required for non-recurring slots' });
+            return res.status(400).json({ success: false, message: 'specificDate required for one-off slots' });
         }
 
         const pool = getPool();
         const staffResult = await pool.request()
             .input('user_id', sql.Int, req.user.userId)
-            .query('SELECT staff_id FROM staff_profiles WHERE user_id = @user_id');
+            .query('SELECT staff_id FROM dbo.staff_profiles WHERE user_id = @user_id');
 
         if (!staffResult.recordset[0]) {
             return res.status(404).json({ success: false, message: 'Staff profile not found' });
         }
 
-        const staffId = staffResult.recordset[0].staff_id;
-
         const result = await pool.request()
-            .input('staff_id', sql.Int, staffId)
+            .input('staff_id', sql.Int, staffResult.recordset[0].staff_id)
             .input('day_of_week', sql.Int, dayOfWeek || null)
             .input('start_time', sql.VarChar, startTime)
             .input('end_time', sql.VarChar, endTime)
@@ -130,17 +140,16 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
             .input('is_recurring', sql.Bit, isRecurring ? 1 : 0)
             .input('specific_date', sql.Date, specificDate || null)
             .query(`
-                INSERT INTO availability_slots 
+                INSERT INTO dbo.availability_slots 
                     (staff_id, day_of_week, start_time, end_time, slot_duration, location, is_recurring, specific_date, is_available, created_at, updated_at)
                 OUTPUT INSERTED.*
-                VALUES 
-                    (@staff_id, @day_of_week, @start_time, @end_time, @slot_duration, @location, @is_recurring, @specific_date, 1, GETDATE(), GETDATE())
+                VALUES (@staff_id, @day_of_week, @start_time, @end_time, @slot_duration, @location, @is_recurring, @specific_date, 1, GETDATE(), GETDATE())
             `);
 
-        return res.status(201).json({ success: true, message: 'Availability slot added', data: { slot: result.recordset[0] } });
+        return res.status(201).json({ success: true, message: 'Slot added', data: { slot: result.recordset[0] } });
     } catch (error) {
         console.error('Add slot error:', error);
-        return res.status(500).json({ success: false, message: 'Error adding availability slot' });
+        return res.status(500).json({ success: false, message: 'Error adding slot' });
     }
 });
 
@@ -150,7 +159,7 @@ router.delete('/availability/:slotId', AuthMiddleware.restrictTo('staff'), async
         const pool = getPool();
         const staffResult = await pool.request()
             .input('user_id', sql.Int, req.user.userId)
-            .query('SELECT staff_id FROM staff_profiles WHERE user_id = @user_id');
+            .query('SELECT staff_id FROM dbo.staff_profiles WHERE user_id = @user_id');
 
         if (!staffResult.recordset[0]) {
             return res.status(404).json({ success: false, message: 'Staff profile not found' });
@@ -159,11 +168,52 @@ router.delete('/availability/:slotId', AuthMiddleware.restrictTo('staff'), async
         await pool.request()
             .input('slot_id', sql.Int, parseInt(req.params.slotId))
             .input('staff_id', sql.Int, staffResult.recordset[0].staff_id)
-            .query('DELETE FROM availability_slots WHERE slot_id = @slot_id AND staff_id = @staff_id');
+            .query('DELETE FROM dbo.availability_slots WHERE slot_id = @slot_id AND staff_id = @staff_id');
 
         return res.status(200).json({ success: true, message: 'Slot removed' });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Error removing slot' });
+    }
+});
+
+// PATCH /api/v1/staff/student-profile  — students update their own profile
+router.patch('/student-profile', AuthMiddleware.restrictTo('student'), async (req, res) => {
+    try {
+        const {
+            firstName, lastName, program, yearOfStudy,
+            department, phoneNumber, isStudentRep, repRole
+        } = req.body;
+
+        const pool = getPool();
+        await pool.request()
+            .input('user_id', sql.Int, req.user.userId)
+            .input('first_name', sql.VarChar, firstName || null)
+            .input('last_name', sql.VarChar, lastName || null)
+            .input('program', sql.VarChar, program || null)
+            .input('year_of_study', sql.Int, yearOfStudy || null)
+            .input('department', sql.VarChar, department || null)
+            .input('phone_number', sql.VarChar, phoneNumber || null)
+            .input('is_student_rep', sql.Bit, isStudentRep ? 1 : 0)
+            .input('rep_role', sql.VarChar, repRole || null)
+            .query(`
+                UPDATE dbo.students SET
+                    first_name = COALESCE(@first_name, first_name),
+                    last_name = COALESCE(@last_name, last_name),
+                    program = COALESCE(@program, program),
+                    year_of_study = COALESCE(@year_of_study, year_of_study),
+                    department = COALESCE(@department, department),
+                    phone_number = COALESCE(@phone_number, phone_number),
+                    is_student_rep = @is_student_rep,
+                    rep_role = @rep_role,
+                    updated_at = GETDATE()
+                WHERE user_id = @user_id
+            `);
+
+        await logAction(req.user.userId, 'STUDENT_PROFILE_UPDATED', 'students', null, req);
+        return res.status(200).json({ success: true, message: 'Profile updated' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false, message: 'Error updating profile' });
     }
 });
 

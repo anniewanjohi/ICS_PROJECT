@@ -357,4 +357,15 @@ export const api = {
             return { success: false, message: 'Failed to create department' };
         }
     },
+    deleteUser: async (userId) => {
+    try {
+        const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: authHeaders(),
+        });
+        return handle(res);
+    } catch {
+        return { success: false, message: 'Failed to delete user' };
+    }
+},
 };

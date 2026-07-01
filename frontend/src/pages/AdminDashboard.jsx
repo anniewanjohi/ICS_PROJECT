@@ -3,6 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
+const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token');
+
+// deleteUser not in api.js yet so inline it here
+const deleteUser = async (userId) => {
+    const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+};
+
 export default function AdminDashboard() {
     const { user, logout } = useAuth();
     const [view, setView] = useState('stats');
@@ -34,7 +46,12 @@ export default function AdminDashboard() {
     const loadUsers = async (p = 1) => {
         setLoading(true);
         const res = await api.getAdminUsers({ role: userRoleFilter, search: userSearch, page: p, limit: 20 });
-        if (res.success) { setUsers(res.data.users); setUsersTotal(res.data.total); setUsersTotalPages(res.data.totalPages); setUsersPage(p); }
+        if (res.success) {
+            setUsers(res.data.users);
+            setUsersTotal(res.data.total);
+            setUsersTotalPages(res.data.totalPages);
+            setUsersPage(p);
+        }
         setLoading(false);
     };
 
@@ -61,28 +78,39 @@ export default function AdminDashboard() {
         else alert(res.message);
     };
 
-    const handleRoleChange = async (userId, currentRole) => {
-        const roles = ['student', 'staff', 'admin'];
-        const next = roles[(roles.indexOf(currentRole) + 1) % roles.length];
-        if (!window.confirm(`Change role to ${next}?`)) return;
-        const res = await api.updateUserRole(userId, next);
-        if (res.success) loadUsers(usersPage);
-        else alert(res.message);
+    const handleDeleteUser = async (userId, email) => {
+        if (!window.confirm(`Permanently delete ${email}? This cannot be undone.`)) return;
+        const res = await deleteUser(userId);
+        if (res.success) {
+            setMsg(`User ${email} deleted.`);
+            loadUsers(usersPage);
+            loadStats();
+        } else {
+            setError(res.message || 'Failed to delete user.');
+        }
     };
 
     const handleCreateUser = async (e) => {
         e.preventDefault(); setLoading(true); setMsg(''); setError('');
         const res = await api.createAdminUser(newUserForm);
-        if (res.success) { setMsg('User created successfully.'); setShowNewUser(false); setNewUserForm({ email: '', password: '', role: 'staff' }); loadUsers(1); }
-        else setError(res.message || 'Failed to create user.');
+        if (res.success) {
+            setMsg('User created successfully.');
+            setShowNewUser(false);
+            setNewUserForm({ email: '', password: '', role: 'staff' });
+            loadUsers(1);
+        } else setError(res.message || 'Failed to create user.');
         setLoading(false);
     };
 
     const handleCreateDept = async (e) => {
         e.preventDefault(); setLoading(true); setMsg(''); setError('');
         const res = await api.createDepartment(deptForm);
-        if (res.success) { setMsg('Department created.'); setShowNewDept(false); setDeptForm({ departmentName: '', departmentCode: '', faculty: '', officeLocation: '', description: '' }); loadDepartments(); }
-        else setError(res.message || 'Failed to create department.');
+        if (res.success) {
+            setMsg('Department created.');
+            setShowNewDept(false);
+            setDeptForm({ departmentName: '', departmentCode: '', faculty: '', officeLocation: '', description: '' });
+            loadDepartments();
+        } else setError(res.message || 'Failed to create department.');
         setLoading(false);
     };
 
@@ -102,7 +130,7 @@ export default function AdminDashboard() {
         alert: (type) => ({ background: type === 'error' ? '#fef2f2' : '#f0fdf4', border: `1px solid ${type === 'error' ? '#fecaca' : '#bbf7d0'}`, color: type === 'error' ? '#dc2626' : '#16a34a', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }),
         badge: (color) => ({ background: color + '18', color, border: `1px solid ${color}40`, borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 600 }),
         th: { textAlign: 'left', padding: '10px 12px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' },
-        td: { padding: '12px', fontSize: 13, color: '#475569', borderBottom: '1px solid #f1f5f9' },
+        td: { padding: '12px', fontSize: 13, color: '#475569', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' },
     };
 
     return (
@@ -125,24 +153,24 @@ export default function AdminDashboard() {
                 {msg && <div style={styles.alert('success')}>{msg}</div>}
                 {error && <div style={styles.alert('error')}>{error}</div>}
 
-                {/* ── STATS ── */}
+                {/* STATS */}
                 {view === 'stats' && stats && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 20 }}>System Overview</h1>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 24 }}>
                             {[
                                 { label: 'Total users', value: stats.total_users, color: '#3b82f6' },
                                 { label: 'Students', value: stats.total_students, color: '#10b981' },
                                 { label: 'Staff', value: stats.total_staff, color: '#8b5cf6' },
                                 { label: 'Staff profiles', value: stats.total_staff_profiles, color: '#f59e0b' },
                                 { label: 'Total appointments', value: stats.total_appointments, color: '#6366f1' },
-                                { label: 'Pending appointments', value: stats.pending_appointments, color: '#ef4444' },
-                                { label: 'Confirmed appointments', value: stats.confirmed_appointments, color: '#10b981' },
-                                { label: "Today's appointments", value: stats.todays_appointments, color: '#1a2744' },
+                                { label: 'Pending', value: stats.pending_appointments, color: '#ef4444' },
+                                { label: 'Confirmed', value: stats.confirmed_appointments, color: '#10b981' },
+                                { label: "Today's", value: stats.todays_appointments, color: '#1a2744' },
                                 { label: 'Departments', value: stats.total_departments, color: '#64748b' },
                             ].map((s, i) => (
                                 <div key={i} style={{ ...styles.card, marginBottom: 0, borderLeft: `4px solid ${s.color}` }}>
-                                    <div style={{ fontSize: 28, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value ?? '—'}</div>
+                                    <div style={{ fontSize: 26, fontWeight: 800, color: s.color, marginBottom: 2 }}>{s.value ?? '—'}</div>
                                     <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>{s.label}</div>
                                 </div>
                             ))}
@@ -150,7 +178,7 @@ export default function AdminDashboard() {
                     </div>
                 )}
 
-                {/* ── USERS ── */}
+                {/* USERS */}
                 {view === 'users' && (
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -160,7 +188,7 @@ export default function AdminDashboard() {
 
                         {showNewUser && (
                             <div style={styles.card}>
-                                <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 14 }}>Create new user account</div>
+                                <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2744', marginBottom: 14 }}>Create new user account</div>
                                 <form onSubmit={handleCreateUser}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                                         <div>
@@ -190,8 +218,11 @@ export default function AdminDashboard() {
 
                         <div style={styles.card}>
                             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                                <input style={{ ...styles.input, flex: 1, marginBottom: 0 }} placeholder="Search by email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && loadUsers(1)} />
-                                <select style={{ ...styles.input, width: 140, marginBottom: 0 }} value={userRoleFilter} onChange={e => { setUserRoleFilter(e.target.value); }}>
+                                <input style={{ ...styles.input, flex: 1, marginBottom: 0 }} placeholder="Search by email..." value={userSearch}
+                                    onChange={e => setUserSearch(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && loadUsers(1)} />
+                                <select style={{ ...styles.input, width: 140, marginBottom: 0 }} value={userRoleFilter}
+                                    onChange={e => { setUserRoleFilter(e.target.value); }}>
                                     <option value="">All roles</option>
                                     <option value="student">Student</option>
                                     <option value="staff">Staff</option>
@@ -203,46 +234,58 @@ export default function AdminDashboard() {
                             {loading ? (
                                 <div style={{ textAlign: 'center', padding: 30, color: '#64748b' }}>Loading...</div>
                             ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead>
-                                        <tr>
-                                            <th style={styles.th}>Name / Email</th>
-                                            <th style={styles.th}>Role</th>
-                                            <th style={styles.th}>Reg No / Staff No</th>
-                                            <th style={styles.th}>Status</th>
-                                            <th style={styles.th}>Last login</th>
-                                            <th style={styles.th}>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {users.map(u => (
-                                            <tr key={u.user_id}>
-                                                <td style={styles.td}>
-                                                    <div style={{ fontWeight: 600, color: '#1a2744' }}>{u.full_name || '—'}</div>
-                                                    <div style={{ fontSize: 12, color: '#94a3b8' }}>{u.email}</div>
-                                                </td>
-                                                <td style={styles.td}>
-                                                    <span style={styles.badge(roleColor(u.role))}>{u.role}</span>
-                                                </td>
-                                                <td style={styles.td}>{u.student_reg_no || u.staff_number || '—'}</td>
-                                                <td style={styles.td}>
-                                                    <span style={styles.badge(u.is_active ? '#10b981' : '#ef4444')}>{u.is_active ? 'Active' : 'Suspended'}</span>
-                                                </td>
-                                                <td style={styles.td}>{u.last_login ? new Date(u.last_login).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'}</td>
-                                                <td style={styles.td}>
-                                                    <div style={{ display: 'flex', gap: 6 }}>
-                                                        <button style={styles.btnSm(u.is_active ? '#ef4444' : '#10b981')} onClick={() => handleToggleStatus(u.user_id, u.is_active)}>
-                                                            {u.is_active ? 'Suspend' : 'Activate'}
-                                                        </button>
-                                                        <button style={styles.btnSm('#8b5cf6')} onClick={() => handleRoleChange(u.user_id, u.role)}>
-                                                            Role ↻
-                                                        </button>
-                                                    </div>
-                                                </td>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={styles.th}>Name / Email</th>
+                                                <th style={styles.th}>Role</th>
+                                                <th style={styles.th}>ID / Reg No</th>
+                                                <th style={styles.th}>Status</th>
+                                                <th style={styles.th}>Last login</th>
+                                                <th style={styles.th}>Actions</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {users.map(u => (
+                                                <tr key={u.user_id}>
+                                                    <td style={styles.td}>
+                                                        <div style={{ fontWeight: 600, color: '#1a2744', fontSize: 13 }}>{u.full_name || '—'}</div>
+                                                        <div style={{ fontSize: 11, color: '#94a3b8' }}>{u.email}</div>
+                                                        {u.is_student_rep ? <div style={{ fontSize: 10, color: '#b45309', marginTop: 2 }}>Rep: {u.rep_role}</div> : null}
+                                                        {u.is_mentor ? <div style={{ fontSize: 10, color: '#7c3aed', marginTop: 2 }}>Also mentor</div> : null}
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <span style={styles.badge(roleColor(u.role))}>{u.role}</span>
+                                                        {u.staff_type && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{u.staff_type}</div>}
+                                                    </td>
+                                                    <td style={styles.td}>{u.student_reg_no || u.staff_number || '—'}</td>
+                                                    <td style={styles.td}>
+                                                        <span style={styles.badge(u.is_active ? '#10b981' : '#ef4444')}>{u.is_active ? 'Active' : 'Suspended'}</span>
+                                                    </td>
+                                                    <td style={styles.td}>{u.last_login ? new Date(u.last_login).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'}</td>
+                                                    <td style={styles.td}>
+                                                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                                                            <button style={styles.btnSm(u.is_active ? '#f59e0b' : '#10b981')} onClick={() => handleToggleStatus(u.user_id, u.is_active)}>
+                                                                {u.is_active ? 'Suspend' : 'Activate'}
+                                                            </button>
+                                                            <button
+                                                                style={styles.btnSm('#ef4444')}
+                                                                onClick={() => handleDeleteUser(u.user_id, u.email)}
+                                                                disabled={u.user_id === user?.id}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {users.length === 0 && (
+                                                <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94a3b8' }}>No users found.</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
 
                             {usersTotalPages > 1 && (
@@ -256,39 +299,23 @@ export default function AdminDashboard() {
                     </div>
                 )}
 
-                {/* ── DEPARTMENTS ── */}
+                {/* DEPARTMENTS */}
                 {view === 'departments' && (
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>Departments</h1>
                             <button style={styles.btn()} onClick={() => setShowNewDept(!showNewDept)}>+ Add department</button>
                         </div>
-
                         {showNewDept && (
                             <div style={styles.card}>
-                                <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 14 }}>Add new department</div>
+                                <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2744', marginBottom: 14 }}>Add new department</div>
                                 <form onSubmit={handleCreateDept}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                                        <div>
-                                            <label style={styles.label}>Department name *</label>
-                                            <input style={styles.input} placeholder="e.g. Informatics" value={deptForm.departmentName} onChange={e => setDeptForm(p => ({ ...p, departmentName: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Code *</label>
-                                            <input style={styles.input} placeholder="e.g. ICS" value={deptForm.departmentCode} onChange={e => setDeptForm(p => ({ ...p, departmentCode: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Faculty *</label>
-                                            <input style={styles.input} placeholder="e.g. SCES" value={deptForm.faculty} onChange={e => setDeptForm(p => ({ ...p, faculty: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Office location</label>
-                                            <input style={styles.input} placeholder="e.g. Block C" value={deptForm.officeLocation} onChange={e => setDeptForm(p => ({ ...p, officeLocation: e.target.value }))} />
-                                        </div>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={styles.label}>Description</label>
-                                            <input style={styles.input} placeholder="Brief description..." value={deptForm.description} onChange={e => setDeptForm(p => ({ ...p, description: e.target.value }))} />
-                                        </div>
+                                        <div><label style={styles.label}>Department name *</label><input style={styles.input} value={deptForm.departmentName} onChange={e => setDeptForm(p => ({ ...p, departmentName: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Code *</label><input style={styles.input} placeholder="e.g. ICS" value={deptForm.departmentCode} onChange={e => setDeptForm(p => ({ ...p, departmentCode: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Faculty *</label><input style={styles.input} placeholder="e.g. SCES" value={deptForm.faculty} onChange={e => setDeptForm(p => ({ ...p, faculty: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Office location</label><input style={styles.input} value={deptForm.officeLocation} onChange={e => setDeptForm(p => ({ ...p, officeLocation: e.target.value }))} /></div>
+                                        <div style={{ gridColumn: 'span 2' }}><label style={styles.label}>Description</label><input style={styles.input} value={deptForm.description} onChange={e => setDeptForm(p => ({ ...p, description: e.target.value }))} /></div>
                                     </div>
                                     <div style={{ display: 'flex', gap: 10 }}>
                                         <button type="submit" style={styles.btn()} disabled={loading}>{loading ? 'Saving...' : 'Save department'}</button>
@@ -297,53 +324,50 @@ export default function AdminDashboard() {
                                 </form>
                             </div>
                         )}
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px,1fr))', gap: 14 }}>
                             {departments.map(d => (
                                 <div key={d.department_id} style={styles.card}>
-                                    <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 4 }}>{d.department_name}</div>
-                                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>{d.department_code} · {d.faculty}</div>
+                                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2744', marginBottom: 4 }}>{d.department_name}</div>
+                                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>{d.department_code} · {d.faculty}</div>
                                     {d.office_location && <div style={{ fontSize: 12, color: '#64748b' }}>📍 {d.office_location}</div>}
                                     {d.description && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{d.description}</div>}
                                 </div>
                             ))}
-                            {departments.length === 0 && (
-                                <div style={{ ...styles.card, color: '#64748b', textAlign: 'center', padding: 30 }}>No departments yet. Add one above.</div>
-                            )}
+                            {departments.length === 0 && <div style={{ ...styles.card, color: '#64748b', textAlign: 'center', padding: 30 }}>No departments yet.</div>}
                         </div>
                     </div>
                 )}
 
-                {/* ── AUDIT LOGS ── */}
+                {/* AUDIT LOGS */}
                 {view === 'logs' && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 20 }}>Audit Logs</h1>
                         <div style={styles.card}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr>
-                                        <th style={styles.th}>Time</th>
-                                        <th style={styles.th}>User</th>
-                                        <th style={styles.th}>Action</th>
-                                        <th style={styles.th}>Entity</th>
-                                        <th style={styles.th}>IP</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {logs.map(log => (
-                                        <tr key={log.log_id}>
-                                            <td style={styles.td}>{new Date(log.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                                            <td style={styles.td}>{log.email || `User ${log.user_id}` || 'System'}</td>
-                                            <td style={styles.td}><span style={{ fontFamily: 'monospace', fontSize: 11, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{log.action}</span></td>
-                                            <td style={styles.td}>{log.entity_type ? `${log.entity_type} #${log.entity_id}` : '—'}</td>
-                                            <td style={styles.td}>{log.ip_address || '—'}</td>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={styles.th}>Time</th>
+                                            <th style={styles.th}>User</th>
+                                            <th style={styles.th}>Action</th>
+                                            <th style={styles.th}>Entity</th>
+                                            <th style={styles.th}>IP</th>
                                         </tr>
-                                    ))}
-                                    {logs.length === 0 && (
-                                        <tr><td colSpan={5} style={{ ...styles.td, textAlign: 'center', color: '#94a3b8' }}>No logs yet.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {logs.map(log => (
+                                            <tr key={log.log_id}>
+                                                <td style={styles.td}>{new Date(log.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                                                <td style={styles.td}>{log.email || `User ${log.user_id}` || 'System'}</td>
+                                                <td style={styles.td}><span style={{ fontFamily: 'monospace', fontSize: 11, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>{log.action}</span></td>
+                                                <td style={styles.td}>{log.entity_type ? `${log.entity_type} #${log.entity_id}` : '—'}</td>
+                                                <td style={styles.td}>{log.ip_address || '—'}</td>
+                                            </tr>
+                                        ))}
+                                        {logs.length === 0 && <tr><td colSpan={5} style={{ ...styles.td, textAlign: 'center', color: '#94a3b8' }}>No logs yet.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
