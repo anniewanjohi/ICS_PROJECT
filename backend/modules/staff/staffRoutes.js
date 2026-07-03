@@ -93,7 +93,7 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
     }
 });
 
-// GET /api/v1/staff/availability — fixed 1970 bug, times now returned as clean strings
+// GET /api/v1/staff/availability
 router.get('/availability', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
         const pool = getPool();
@@ -121,7 +121,7 @@ router.get('/availability', AuthMiddleware.restrictTo('staff'), async (req, res)
     }
 });
 
-// POST /api/v1/staff/availability — supports Google Meet link for online slots
+// POST /api/v1/staff/availability
 router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
         const { dayOfWeek, startTime, endTime, slotDuration, location, isRecurring, specificDate, meetingLink } = req.body;
@@ -202,7 +202,7 @@ router.delete('/availability/:slotId', AuthMiddleware.restrictTo('staff'), async
     }
 });
 
-// PATCH /api/v1/staff/student-profile — students update their own profile
+// PATCH /api/v1/staff/student-profile
 router.patch('/student-profile', AuthMiddleware.restrictTo('student'), async (req, res) => {
     try {
         const {

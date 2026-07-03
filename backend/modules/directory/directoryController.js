@@ -52,6 +52,17 @@ class DirectoryController {
             return res.status(500).json({ success: false, message: 'Error fetching departments' });
         }
     }
+
+    // GET /api/v1/directory/filters
+    static async getFilters(req, res) {
+        try {
+            const filters = await DirectoryModel.getFilters();
+            return res.status(200).json({ success: true, data: filters });
+        } catch (error) {
+            console.error('Get filters error:', error);
+            return res.status(500).json({ success: false, message: 'Error fetching filters' });
+        }
+    }
 }
 
 module.exports = DirectoryController;

@@ -13,10 +13,8 @@ import {
   CircularProgress,
   IconButton,
   InputAdornment,
-  Grid,
   Tab,
   Tabs,
-  Divider,
   Modal,
   Backdrop,
   Slide,
@@ -32,21 +30,32 @@ import {
 } from "@mui/icons-material";
 import { api } from "../../services/api";
 
-// Custom fade component using MUI's Slide
-const FadeTransition = React.forwardRef(function FadeTransition(props, ref) {
-  const { in: inProp, children, ...other } = props;
-  return (
-    <Slide direction="up" in={inProp} ref={ref} {...other}>
-      {children}
-    </Slide>
-  );
-});
+// ---------- Institutional palette (matches the landing page) ----------
+const NAVY = "#0b2547";
+const NAVY_HOVER = "#123a68";
+const GOLD = "#c9a35c";
+const BORDER = "#d7dde3";
+const TEXT_MUTED = "#5b6774";
+const PANEL_WIDTH = 360;
 
 const validate = {
   email: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? "" : "Enter a valid email address",
   password: (v) => v.length >= 8 ? "" : "Password must be at least 8 characters",
   confirmPassword: (v, pw) => v === pw ? "" : "Passwords do not match",
   fullname: (v) => v.trim().length >= 2 ? "" : "Full name is required",
+};
+
+const fieldSx = {
+  mb: 2,
+  "& .MuiInputBase-input": { fontSize: "0.85rem", py: 1.1 },
+  "& .MuiInputLabel-root": { fontSize: "0.85rem" },
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "4px",
+    "& fieldset": { borderColor: BORDER },
+    "&:hover fieldset": { borderColor: "#b7c2cf" },
+    "&.Mui-focused fieldset": { borderColor: NAVY, borderWidth: "1px" },
+  },
+  "& .MuiInputLabel-root.Mui-focused": { color: NAVY },
 };
 
 const AuthModal = ({ open, onClose, onLoginSuccess }) => {
@@ -137,14 +146,14 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
       setTouched({ email: true, password: true });
       return;
     }
-    
+
     setLoading(true);
     setError("");
     setSuccess("");
 
     try {
       const result = await api.login(loginForm.email, loginForm.password);
-      
+
       if (result.success) {
         if (loginForm.remember) {
           localStorage.setItem("token", result.data.token);
@@ -153,9 +162,9 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
           sessionStorage.setItem("token", result.data.token);
           sessionStorage.setItem("user", JSON.stringify(result.data.user));
         }
-        
+
         setSuccess("Login successful! Redirecting...");
-        
+
         setTimeout(() => {
           if (onLoginSuccess) { onLoginSuccess(result.data.user, result.data.token, loginForm.remember); }
           onClose();
@@ -184,7 +193,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
       });
       return;
     }
-    
+
     setLoading(true);
     setError("");
     setSuccess("");
@@ -199,9 +208,9 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
           last_name: regForm.fullname.split(' ').slice(1).join(' ') || '',
         }
       };
-      
+
       const result = await api.register(registrationData);
-      
+
       if (result.success) {
         setSuccess("Registration successful! You can now sign in.");
         setTimeout(() => {
@@ -210,7 +219,6 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
           setLoginForm(prev => ({ ...prev, email: regForm.email }));
         }, 3000);
       } else {
-        // FIX 1: Show individual password errors if they exist, otherwise show general message
         if (result.errors && result.errors.length > 0) {
           setError(result.errors.join(' · '));
         } else {
@@ -230,7 +238,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
       setError("Please enter your email address first");
       return;
     }
-    
+
     setLoading(true);
     try {
       const result = await api.forgotPassword(loginForm.email);
@@ -255,114 +263,103 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
 
   const passwordStrength = getPasswordStrength(regForm.password);
   const strengthLabels = ["", "Weak", "Fair", "Good", "Strong"];
-  const strengthColors = ["", "#f44336", "#ff9800", "#4caf50", "#4caf50"];
-
-  const demoCredentials = {
-    student: { email: "student@strathmore.edu", password: "Student@123" },
-    staff: { email: "staff@strathmore.edu", password: "Staff@123" },
-    admin: { email: "admin@strathmore.edu", password: "Admin@123" },
-  };
-
-  const fillDemoCredentials = (type) => {
-    setLoginForm({
-      email: demoCredentials[type].email,
-      password: demoCredentials[type].password,
-      remember: false,
-    });
-  };
+  const strengthColors = ["", "#c0392b", "#b8762a", "#1e8e4f", "#1e8e4f"];
 
   return (
-   <Modal
-  open={open}
-  onClose={onClose}
-  closeAfterTransition
-  slots={{ backdrop: Backdrop }}
-  slotProps={{
-    backdrop: {
-      timeout: 500,
-      sx: {
-        backdropFilter: "blur(8px)",
-        backgroundColor: "rgba(0, 0, 0, 0.7)",
-      },
-    },
-  }}
-  sx={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  }}
->
-  <Slide direction="up" in={open} mountOnEnter unmountOnExit>
-    <Box
+    <Modal
+      open={open}
+      onClose={onClose}
+      closeAfterTransition
+      slots={{ backdrop: Backdrop }}
+      slotProps={{
+        backdrop: {
+          timeout: 400,
+          sx: {
+            backgroundColor: "rgba(8, 27, 51, 0.55)",
+          },
+        },
+      }}
       sx={{
-        width: { xs: "95%", sm: 450, md: 500 },
-        maxHeight: "90vh",
-        overflow: "auto",
-        outline: "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
+      <Slide direction="up" in={open} mountOnEnter unmountOnExit>
+        <Box
+          sx={{
+            width: { xs: "92%", sm: PANEL_WIDTH },
+            maxHeight: "90vh",
+            outline: "none",
+          }}
+        >
           <Paper
-            elevation={24}
+            elevation={8}
+            square={false}
             sx={{
               background: "#fff",
-              borderRadius: "16px",
-              overflow: "hidden",
-              border: "1px solid #e2e8f0",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              border: `1px solid ${BORDER}`,
+              borderRadius: "6px",
               position: "relative",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <IconButton
-              onClick={onClose}
+            {/* Header bar - flat navy strip like the site nav/panel headers */}
+            <Box
               sx={{
-                position: "absolute",
-                top: 12,
-                right: 12,
-                zIndex: 1,
-                color: "#64748b",
-                "&:hover": {
-                  background: "rgba(217,166,83,0.1)",
-                  color: "#1a2744",
-                },
+                background: NAVY,
+                color: "#fff",
+                px: 2,
+                py: 1.25,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                flexShrink: 0,
+                borderTopLeftRadius: "6px",
+                borderTopRightRadius: "6px",
               }}
             >
-              <Close />
-            </IconButton>
-
-            <Box sx={{ textAlign: "center", pt: 4, pb: 2, px: 3 }}>
               <Box
                 sx={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: "10px",
-                  background: "#D9A653",
-                  display: "inline-flex",
+                  width: 26,
+                  height: 26,
+                  borderRadius: "4px",
+                  background: "rgba(255,255,255,0.12)",
+                  display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  mb: 2,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  flexShrink: 0,
                 }}
               >
-                <Typography sx={{ fontSize: 28 }}>📚</Typography>
+                SD
               </Box>
               <Typography
                 sx={{
-                  fontFamily: '"Fraunces", serif',
-                  fontWeight: 800,
-                  fontSize: "1.5rem",
-                  color: "#1a2744",
-                  letterSpacing: "-0.02em",
+                  fontFamily: "Arial, sans-serif",
+                  fontWeight: 700,
+                  fontSize: "0.8rem",
+                  color: "#fff",
+                  flex: 1,
                 }}
               >
                 Strathmore Directory
               </Typography>
-              <Typography
+              <IconButton
+                onClick={onClose}
+                size="small"
                 sx={{
-                  fontSize: "0.75rem",
-                  color: "#64748b",
-                  mt: 0.5,
+                  color: "rgba(255,255,255,0.75)",
+                  p: 0.5,
+                  "&:hover": { background: "rgba(255,255,255,0.12)", color: "#fff" },
                 }}
               >
-                Sign in to access the directory
-              </Typography>
+                <Close fontSize="small" />
+              </IconButton>
             </Box>
 
             <Tabs
@@ -370,19 +367,22 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
               onChange={handleTabChange}
               variant="fullWidth"
               sx={{
-                borderBottom: "1px solid #e2e8f0",
+                borderBottom: `1px solid ${BORDER}`,
+                minHeight: 36,
+                flexShrink: 0,
                 "& .MuiTab-root": {
-                  py: 1.5,
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
+                  py: 0.75,
+                  minHeight: 36,
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
                   textTransform: "none",
-                  color: "#64748b",
+                  color: TEXT_MUTED,
                   "&.Mui-selected": {
-                    color: "#D9A653",
+                    color: NAVY,
                   },
                 },
                 "& .MuiTabs-indicator": {
-                  backgroundColor: "#D9A653",
+                  backgroundColor: GOLD,
                   height: 3,
                 },
               }}
@@ -391,14 +391,11 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
               <Tab label="Register" />
             </Tabs>
 
-            <Box sx={{ p: { xs: 2.5, sm: 3.5 } }}>
+            <Box sx={{ p: 2 }}>
               {error && (
                 <Alert
                   severity="error"
-                  sx={{
-                    mb: 3,
-                    borderRadius: "8px",
-                  }}
+                  sx={{ mb: 2, fontSize: "0.8rem", borderRadius: "4px" }}
                   onClose={() => setError("")}
                 >
                   {error}
@@ -409,10 +406,10 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                 <Box sx={{ textAlign: "center", py: 4 }}>
                   <Box
                     sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: "50%",
-                      background: "linear-gradient(135deg, #4CAF50, #45A049)",
+                      width: 56,
+                      height: 56,
+                      borderRadius: "4px",
+                      background: "#e4f7ea",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -420,19 +417,14 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                       mb: 2,
                     }}
                   >
-                    <CheckCircle sx={{ fontSize: 36, color: "white" }} />
+                    <CheckCircle sx={{ fontSize: 30, color: "#1e8e4f" }} />
                   </Box>
                   <Typography
-                    sx={{
-                      fontSize: "1.1rem",
-                      fontWeight: 700,
-                      color: "#1a2744",
-                      mb: 1,
-                    }}
+                    sx={{ fontSize: "1rem", fontWeight: 700, color: NAVY, mb: 1 }}
                   >
                     {tabValue === 0 ? "Welcome Back!" : "Account Created!"}
                   </Typography>
-                  <Typography sx={{ fontSize: "0.875rem", color: "#64748b" }}>
+                  <Typography sx={{ fontSize: "0.85rem", color: TEXT_MUTED }}>
                     {success}
                   </Typography>
                   {tabValue === 1 && (
@@ -441,11 +433,14 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                       onClick={() => setTabValue(0)}
                       sx={{
                         mt: 3,
-                        background: "#D9A653",
+                        background: NAVY,
                         color: "white",
-                        "&:hover": { background: "#c8953d" },
-                        borderRadius: "8px",
+                        "&:hover": { background: NAVY_HOVER },
+                        borderRadius: "4px",
                         px: 3,
+                        boxShadow: "none",
+                        textTransform: "none",
+                        fontWeight: 700,
                       }}
                     >
                       Go to Sign In
@@ -470,16 +465,11 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         error={touched.email && !!errors.email}
                         helperText={touched.email && errors.email}
                         placeholder="you@strathmore.edu"
-                        sx={{
-                          mb: 3,
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                          },
-                        }}
+                        sx={fieldSx}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Email sx={{ color: "#64748b", fontSize: 20 }} />
+                              <Email sx={{ color: TEXT_MUTED, fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -495,16 +485,11 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         error={touched.password && !!errors.password}
                         helperText={touched.password && errors.password}
                         placeholder="••••••••"
-                        sx={{
-                          mb: 2,
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                          },
-                        }}
+                        sx={{ ...fieldSx, mb: 2 }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Lock sx={{ color: "#64748b", fontSize: 20 }} />
+                              <Lock sx={{ color: TEXT_MUTED, fontSize: 20 }} />
                             </InputAdornment>
                           ),
                           endAdornment: (
@@ -522,7 +507,7 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          mb: 3,
+                          mb: 2,
                           flexWrap: "wrap",
                           gap: 1,
                         }}
@@ -533,13 +518,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                               checked={loginForm.remember}
                               onChange={(e) => setLoginForm((prev) => ({ ...prev, remember: e.target.checked }))}
                               sx={{
-                                color: "#D9A653",
-                                "&.Mui-checked": { color: "#D9A653" },
+                                color: BORDER,
+                                "&.Mui-checked": { color: NAVY },
                               }}
                             />
                           }
                           label={
-                            <Typography sx={{ fontSize: "0.813rem", color: "#64748b" }}>
+                            <Typography sx={{ fontSize: "0.8rem", color: TEXT_MUTED }}>
                               Remember me
                             </Typography>
                           }
@@ -547,10 +532,10 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         <Button
                           onClick={handleForgotPassword}
                           sx={{
-                            fontSize: "0.813rem",
-                            color: "#D9A653",
+                            fontSize: "0.8rem",
+                            color: NAVY,
                             textTransform: "none",
-                            fontWeight: 500,
+                            fontWeight: 600,
                             "&:hover": { background: "transparent", textDecoration: "underline" },
                           }}
                         >
@@ -564,73 +549,20 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         variant="contained"
                         disabled={loading}
                         sx={{
-                          background: "#D9A653",
+                          background: NAVY,
                           color: "white",
-                          py: 1.5,
-                          borderRadius: "8px",
-                          fontSize: "0.9375rem",
-                          fontWeight: 600,
-                          "&:hover": { background: "#c8953d" },
+                          py: 1,
+                          borderRadius: "4px",
+                          fontSize: "0.875rem",
+                          fontWeight: 700,
+                          textTransform: "none",
+                          boxShadow: "none",
+                          "&:hover": { background: NAVY_HOVER, boxShadow: "none" },
                           "&:disabled": { opacity: 0.7 },
                         }}
                       >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : "Sign In"}
+                        {loading ? <CircularProgress size={22} color="inherit" /> : "Sign In"}
                       </Button>
-
-                      <Divider sx={{ my: 3 }}>
-                        <Typography sx={{ fontSize: "0.75rem", color: "#64748b" }}>
-                          Demo Credentials
-                        </Typography>
-                      </Divider>
-
-                      <Box
-                        sx={{
-                          display: "flex",
-                          gap: 2,
-                          flexDirection: { xs: "column", sm: "row" },
-                          mb: 2,
-                        }}
-                      >
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => fillDemoCredentials("student")}
-                          sx={{
-                            flex: 1,
-                            borderColor: "#e2e8f0",
-                            color: "#1a2744",
-                            "&:hover": { borderColor: "#D9A653" },
-                          }}
-                        >
-                          Student Demo
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => fillDemoCredentials("staff")}
-                          sx={{
-                            flex: 1,
-                            borderColor: "#e2e8f0",
-                            color: "#1a2744",
-                            "&:hover": { borderColor: "#D9A653" },
-                          }}
-                        >
-                          Staff Demo
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => fillDemoCredentials("admin")}
-                          sx={{
-                            flex: 1,
-                            borderColor: "#e2e8f0",
-                            color: "#1a2744",
-                            "&:hover": { borderColor: "#D9A653" },
-                          }}
-                        >
-                          Admin Demo
-                        </Button>
-                      </Box>
                     </form>
                   )}
 
@@ -649,16 +581,11 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         error={touched.fullname && !!errors.fullname}
                         helperText={touched.fullname && errors.fullname}
                         placeholder="John Doe"
-                        sx={{
-                          mb: 3,
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                          },
-                        }}
+                        sx={fieldSx}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Person sx={{ color: "#64748b", fontSize: 20 }} />
+                              <Person sx={{ color: TEXT_MUTED, fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -677,16 +604,11 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         error={touched.email && !!errors.email}
                         helperText={touched.email && errors.email}
                         placeholder="you@strathmore.edu"
-                        sx={{
-                          mb: 3,
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                          },
-                        }}
+                        sx={fieldSx}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Email sx={{ color: "#64748b", fontSize: 20 }} />
+                              <Email sx={{ color: TEXT_MUTED, fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -698,16 +620,11 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         label="Role"
                         value={regForm.role}
                         onChange={(e) => setRegForm((prev) => ({ ...prev, role: e.target.value }))}
-                        sx={{
-                          mb: 3,
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                          },
-                        }}
+                        sx={fieldSx}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Person sx={{ color: "#64748b", fontSize: 20 }} />
+                              <Person sx={{ color: TEXT_MUTED, fontSize: 20 }} />
                             </InputAdornment>
                           ),
                         }}
@@ -727,23 +644,17 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                           setErrors((prev) => ({ ...prev, password: validate.password(regForm.password) }));
                         }}
                         error={touched.password && !!errors.password}
-                        // FIX 2: Show requirements hint by default, error message when validation fails
                         helperText={
                           touched.password && errors.password
                             ? errors.password
                             : "Min. 8 chars, uppercase, lowercase, number, special character (!@#$...)"
                         }
                         placeholder="Min. 8 characters"
-                        sx={{
-                          mb: 2,
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                          },
-                        }}
+                        sx={{ ...fieldSx, mb: 2 }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Lock sx={{ color: "#64748b", fontSize: 20 }} />
+                              <Lock sx={{ color: TEXT_MUTED, fontSize: 20 }} />
                             </InputAdornment>
                           ),
                           endAdornment: (
@@ -766,13 +677,13 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                                   flex: 1,
                                   height: 3,
                                   borderRadius: "2px",
-                                  background: i <= passwordStrength ? strengthColors[passwordStrength] : "#e2e8f0",
+                                  background: i <= passwordStrength ? strengthColors[passwordStrength] : BORDER,
                                   transition: "background 0.3s",
                                 }}
                               />
                             ))}
                           </Box>
-                          <Typography sx={{ fontSize: "0.7rem", color: strengthColors[passwordStrength] || "#64748b" }}>
+                          <Typography sx={{ fontSize: "0.7rem", color: strengthColors[passwordStrength] || TEXT_MUTED }}>
                             {strengthLabels[passwordStrength]} password
                           </Typography>
                         </Box>
@@ -794,16 +705,11 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         error={touched.confirmPassword && !!errors.confirmPassword}
                         helperText={touched.confirmPassword && errors.confirmPassword}
                         placeholder="Re-enter password"
-                        sx={{
-                          mb: 3,
-                          "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                          },
-                        }}
+                        sx={fieldSx}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
-                              <Lock sx={{ color: "#64748b", fontSize: 20 }} />
+                              <Lock sx={{ color: TEXT_MUTED, fontSize: 20 }} />
                             </InputAdornment>
                           ),
                           endAdornment: (
@@ -822,23 +728,25 @@ const AuthModal = ({ open, onClose, onLoginSuccess }) => {
                         variant="contained"
                         disabled={loading}
                         sx={{
-                          background: "#D9A653",
+                          background: NAVY,
                           color: "white",
-                          py: 1.5,
-                          borderRadius: "8px",
-                          fontSize: "0.9375rem",
-                          fontWeight: 600,
-                          "&:hover": { background: "#c8953d" },
+                          py: 1,
+                          borderRadius: "4px",
+                          fontSize: "0.875rem",
+                          fontWeight: 700,
+                          textTransform: "none",
+                          boxShadow: "none",
+                          "&:hover": { background: NAVY_HOVER, boxShadow: "none" },
                           "&:disabled": { opacity: 0.7 },
                         }}
                       >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : "Create Account"}
+                        {loading ? <CircularProgress size={22} color="inherit" /> : "Create Account"}
                       </Button>
 
                       <Typography
                         sx={{
                           fontSize: "0.7rem",
-                          color: "#64748b",
+                          color: TEXT_MUTED,
                           textAlign: "center",
                           mt: 2,
                         }}

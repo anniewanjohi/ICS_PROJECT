@@ -18,9 +18,21 @@ class AppointmentController {
         }
     }
 
+    // NEW: Get slots for a specific date
+    static async getSlotsByDate(req, res) {
+        try {
+            const { staffId, date } = req.params;
+            const slots = await AppointmentModel.getSlotsForDate(parseInt(staffId), date);
+            return res.status(200).json({ success: true, data: { slots } });
+        } catch (error) {
+            console.error('Get slots by date error:', error);
+            return res.status(500).json({ success: false, message: 'Error fetching slots' });
+        }
+    }
+
     static async book(req, res) {
         try {
-            const { staffId, slotId, appointmentDate, startTime, endTime, purpose, additionalNotes, meetingLocation } = req.body;
+            const { staffId, appointmentDate, startTime, endTime, purpose, additionalNotes, meetingLocation } = req.body;
 
             if (!staffId || !appointmentDate || !startTime || !endTime || !purpose) {
                 return res.status(400).json({ success: false, message: 'staffId, appointmentDate, startTime, endTime, and purpose are required' });
@@ -43,13 +55,12 @@ class AppointmentController {
             }
 
             // Extract Google Meet link if the slot's location indicates it is online.
-            // Slots created as online have their location formatted as "Online — <link>"
             let extractedMeetingLink = null;
             if (meetingLocation && meetingLocation.startsWith('Online — ')) {
                 extractedMeetingLink = meetingLocation.replace('Online — ', '').trim();
             }
 
-            const appointment = await AppointmentModel.create(studentId, parseInt(staffId), slotId || null, {
+            const appointment = await AppointmentModel.create(studentId, parseInt(staffId), null, {
                 appointmentDate, startTime, endTime, purpose, additionalNotes,
                 meetingLocation, meetingLink: extractedMeetingLink
             });
@@ -221,6 +232,86 @@ class AppointmentController {
         } catch (error) {
             console.error('Cancel appointment error:', error);
             return res.status(500).json({ success: false, message: 'Error cancelling appointment' });
+        }
+    }
+
+    // NEW: Reschedule appointment
+    static async reschedule(req, res) {
+        try {
+            const { id } = req.params;
+            const { appointmentDate, startTime, endTime, reason } = req.body;
+
+            if (!appointmentDate || !startTime || !endTime) {
+                return res.status(400).json({ success: false, message: 'appointmentDate, startTime, and endTime are required' });
+            }
+
+            const appointment = await AppointmentModel.findById(parseInt(id));
+            if (!appointment) {
+                return res.status(404).json({ success: false, message: 'Appointment not found' });
+            }
+
+            // Check if user is authorized (student or staff)
+            const pool = getPool();
+            let isAuthorized = false;
+
+            if (req.user.role === 'student') {
+                const studentResult = await pool.request()
+                    .input('user_id', sql.Int, req.user.userId)
+                    .query('SELECT student_id FROM students WHERE user_id = @user_id');
+                if (studentResult.recordset[0] && studentResult.recordset[0].student_id === appointment.student_id) {
+                    isAuthorized = true;
+                }
+            } else if (req.user.role === 'staff') {
+                const staffResult = await pool.request()
+                    .input('user_id', sql.Int, req.user.userId)
+                    .query('SELECT staff_id FROM staff_profiles WHERE user_id = @user_id');
+                if (staffResult.recordset[0] && staffResult.recordset[0].staff_id === appointment.staff_id) {
+                    isAuthorized = true;
+                }
+            }
+
+            if (!isAuthorized) {
+                return res.status(403).json({ success: false, message: 'You are not authorized to reschedule this appointment' });
+            }
+
+            // Check if new slot is available
+            const taken = await AppointmentModel.isSlotTaken(appointment.staff_id, appointmentDate, startTime);
+            if (taken) {
+                return res.status(409).json({ success: false, message: 'This time slot is already booked. Please select another.' });
+            }
+
+            // Update appointment
+            const updated = await AppointmentModel.reschedule(parseInt(id), {
+                appointmentDate,
+                startTime,
+                endTime,
+                reason: reason || 'Rescheduled by user'
+            });
+
+            // Notify both parties
+            await NotificationModel.create({
+                userId: appointment.student_user_id,
+                appointmentId: parseInt(id),
+                title: 'Appointment Rescheduled',
+                message: `Your appointment has been rescheduled to ${appointmentDate} at ${startTime}.`,
+                type: 'appointment_rescheduled'
+            });
+
+            await NotificationModel.create({
+                userId: appointment.staff_user_id,
+                appointmentId: parseInt(id),
+                title: 'Appointment Rescheduled',
+                message: `An appointment has been rescheduled to ${appointmentDate} at ${startTime}.`,
+                type: 'appointment_rescheduled'
+            });
+
+            await logAction(req.user.userId, 'APPOINTMENT_RESCHEDULED', 'appointments', parseInt(id), req);
+
+            return res.status(200).json({ success: true, message: 'Appointment rescheduled successfully', data: { appointment: updated } });
+
+        } catch (error) {
+            console.error('Reschedule appointment error:', error);
+            return res.status(500).json({ success: false, message: 'Error rescheduling appointment' });
         }
     }
 }

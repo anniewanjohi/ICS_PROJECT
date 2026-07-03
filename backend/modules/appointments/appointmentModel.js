@@ -37,6 +37,36 @@ const AppointmentModel = {
         }));
     },
 
+    // NEW: Get slots for a specific date
+    getSlotsForDate: async (staffId, date) => {
+        const pool = getPool();
+        const dayOfWeek = new Date(date).getDay(); // 0=Sunday, 1=Monday, etc.
+        
+        const result = await pool.request()
+            .input('staff_id', sql.Int, staffId)
+            .input('day_of_week', sql.Int, dayOfWeek)
+            .input('specific_date', sql.Date, date)
+            .query(`
+                SELECT 
+                    slot_id, day_of_week, start_time, end_time,
+                    slot_duration, location, is_recurring,
+                    specific_date, is_available
+                FROM availability_slots
+                WHERE staff_id = @staff_id
+                  AND is_available = 1
+                  AND (
+                      (is_recurring = 1 AND day_of_week = @day_of_week)
+                      OR (specific_date = @specific_date)
+                  )
+                ORDER BY start_time ASC
+            `);
+        return result.recordset.map(slot => ({
+            ...slot,
+            start_time: formatTimeField(slot.start_time),
+            end_time: formatTimeField(slot.end_time),
+        }));
+    },
+
     getBookedSlots: async (staffId) => {
         const pool = getPool();
         const result = await pool.request()
@@ -55,7 +85,6 @@ const AppointmentModel = {
         }));
     },
 
-    // Book an appointment, now supports meetingLink
     create: async (studentId, staffId, slotId, data) => {
         const pool = getPool();
         const result = await pool.request()
@@ -99,7 +128,6 @@ const AppointmentModel = {
         return result.recordset[0].count > 0;
     },
 
-    // Get appointments for a student, now includes meeting_link and fixed times
     getStudentAppointments: async (studentId, status = '') => {
         const pool = getPool();
         const request = pool.request().input('student_id', sql.Int, studentId);
@@ -141,7 +169,6 @@ const AppointmentModel = {
         }));
     },
 
-    // Get appointments for a staff member, fixed times
     getStaffAppointments: async (staffId, status = '') => {
         const pool = getPool();
         const request = pool.request().input('staff_id', sql.Int, staffId);
@@ -225,6 +252,36 @@ const AppointmentModel = {
             OUTPUT INSERTED.*
             WHERE appointment_id = @appointment_id
         `);
+        const row = result.recordset[0];
+        if (row) {
+            row.start_time = formatTimeField(row.start_time);
+            row.end_time = formatTimeField(row.end_time);
+        }
+        return row;
+    },
+
+    // NEW: Reschedule appointment
+    reschedule: async (appointmentId, data) => {
+        const pool = getPool();
+        const result = await pool.request()
+            .input('appointment_id', sql.Int, appointmentId)
+            .input('appointment_date', sql.Date, data.appointmentDate)
+            .input('start_time', sql.VarChar, data.startTime)
+            .input('end_time', sql.VarChar, data.endTime)
+            .input('reschedule_reason', sql.VarChar, data.reason || null)
+            .query(`
+                UPDATE appointments 
+                SET 
+                    appointment_date = @appointment_date,
+                    start_time = @start_time,
+                    end_time = @end_time,
+                    reschedule_reason = @reschedule_reason,
+                    rescheduled_at = GETDATE(),
+                    status = 'pending',
+                    updated_at = GETDATE()
+                OUTPUT INSERTED.*
+                WHERE appointment_id = @appointment_id
+            `);
         const row = result.recordset[0];
         if (row) {
             row.start_time = formatTimeField(row.start_time);

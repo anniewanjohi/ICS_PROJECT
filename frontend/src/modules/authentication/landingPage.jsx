@@ -16,103 +16,127 @@ const LandingPage = () => {
   const css = `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
-    body { font-family: Inter, system-ui, sans-serif; background: #f8fafc; color: #1a2744; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    body { font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; background: #eef1f4; color: #29303a; line-height: 1.5; }
 
-    .lp-nav { background: #1a2744; color: #fff; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; z-index: 100; }
-    .lp-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; color: #fff; text-decoration: none; }
-    .lp-logo-mark { width: 30px; height: 30px; border-radius: 7px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #D9A653; flex-shrink: 0; }
-    .lp-nav-links { display: flex; align-items: center; gap: 4px; }
-    .lp-nav-link { background: transparent; border: none; color: rgba(255,255,255,0.75); padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; text-decoration: none; }
-    .lp-nav-link:hover { background: rgba(255,255,255,0.12); color: #fff; }
-    .lp-nav-right { display: flex; align-items: center; gap: 10px; }
-    .lp-sign-in { background: rgba(255,255,255,0.12); border: none; color: #fff; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .lp-sign-in:hover { background: rgba(255,255,255,0.2); }
-    .lp-cta-btn { background: #D9A653; color: #1a2744; border: none; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
-    .lp-cta-btn:hover { background: #c8953d; }
+    a { color: #2f6fb5; }
+
+    /* ---------- Top utility bar (matches AMS / eLearning contact strip) ---------- */
+    .lp-topbar { background: #081b33; color: rgba(255,255,255,0.75); font-size: 12px; }
+    .lp-topbar-inner { max-width: 1140px; margin: 0 auto; padding: 6px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .lp-topbar-contact { display: flex; gap: 18px; flex-wrap: wrap; }
+    .lp-topbar-contact span { white-space: nowrap; }
+    .lp-topbar-links { display: flex; gap: 14px; flex-wrap: wrap; }
+    .lp-topbar-links a { color: rgba(255,255,255,0.75); text-decoration: none; }
+    .lp-topbar-links a:hover { color: #fff; text-decoration: underline; }
+
+    /* ---------- Main nav ---------- */
+    .lp-nav { background: #fff; border-bottom: 1px solid #d7dde3; padding: 0 20px; }
+    .lp-nav-inner { max-width: 1140px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .lp-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: #0b2547; text-decoration: none; }
+    .lp-logo-mark { width: 36px; height: 36px; border-radius: 4px; background: #0b2547; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .lp-logo-sub { display: block; font-size: 10px; font-weight: 500; color: #5b6774; letter-spacing: 0.04em; }
+    .lp-nav-links { display: flex; align-items: center; gap: 2px; }
+    .lp-nav-link { position: relative; background: transparent; border: none; color: #29303a; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; border-bottom: 3px solid transparent; }
+    .lp-nav-link:hover { color: #0b2547; border-bottom-color: #c9a35c; }
+    .lp-nav-right { display: flex; align-items: center; gap: 8px; }
+    .lp-sign-in { background: #fff; border: 1px solid #0b2547; color: #0b2547; padding: 7px 16px; border-radius: 3px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .lp-sign-in:hover { background: #f0f4f8; }
+    .lp-cta-btn { background: #0b2547; color: #fff; border: 1px solid #0b2547; padding: 7px 16px; border-radius: 3px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .lp-cta-btn:hover { background: #123a68; }
     .lp-user-wrap { display: flex; align-items: center; gap: 10px; }
-    .lp-user-av { width: 32px; height: 32px; border-radius: 50%; background: #D9A653; color: #1a2744; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
-    .lp-sign-out { background: rgba(255,255,255,0.1); border: none; color: rgba(255,255,255,0.8); padding: 5px 12px; border-radius: 7px; font-size: 12px; cursor: pointer; }
+    .lp-user-av { width: 32px; height: 32px; border-radius: 3px; background: #0b2547; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+    .lp-sign-out { background: #fff; border: 1px solid #d7dde3; color: #29303a; padding: 6px 12px; border-radius: 3px; font-size: 12px; cursor: pointer; }
+    .lp-sign-out:hover { background: #f4f6f8; }
 
-    .lp-hero { background: #1a2744; color: #fff; padding: 72px 24px 80px; }
-    .lp-hero-inner { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1.1fr 1fr; gap: 60px; align-items: center; }
-    .lp-hero-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(217,166,83,0.15); border: 1px solid rgba(217,166,83,0.3); color: #D9A653; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 20px; }
-    .lp-hero h1 { font-size: clamp(2rem, 3.5vw, 3rem); font-weight: 800; line-height: 1.12; color: #fff; margin-bottom: 18px; letter-spacing: -0.02em; font-family: inherit; }
-    .lp-hero h1 em { font-style: italic; color: #D9A653; }
-    .lp-hero-lead { font-size: 1rem; color: rgba(255,255,255,0.65); max-width: 440px; margin-bottom: 32px; line-height: 1.7; }
-    .lp-hero-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 40px; }
-    .lp-btn-primary { background: #D9A653; color: #1a2744; border: none; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
-    .lp-btn-primary:hover { background: #c8953d; }
-    .lp-btn-ghost { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
-    .lp-btn-ghost:hover { background: rgba(255,255,255,0.18); }
-    .lp-hero-stats { display: flex; gap: 28px; }
-    .lp-stat strong { display: block; font-size: 1.5rem; font-weight: 800; color: #D9A653; }
-    .lp-stat span { font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.06em; }
+    /* ---------- Hero ---------- */
+    .lp-hero { background: #f4f6f8; border-bottom: 1px solid #d7dde3; padding: 48px 20px; }
+    .lp-hero-inner { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 40px; align-items: start; }
+    .lp-hero-eyebrow { display: inline-block; background: #e7edf4; color: #0b2547; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 14px; border: 1px solid #d7dde3; }
+    .lp-hero h1 { font-size: clamp(1.6rem, 2.6vw, 2.15rem); font-weight: 700; line-height: 1.3; color: #0b2547; margin-bottom: 14px; }
+    .lp-hero-lead { font-size: 14px; color: #445064; max-width: 480px; margin-bottom: 22px; line-height: 1.7; }
+    .lp-hero-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px; }
+    .lp-btn-primary { background: #0b2547; color: #fff; border: 1px solid #0b2547; padding: 10px 20px; border-radius: 3px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .lp-btn-primary:hover { background: #123a68; }
+    .lp-btn-ghost { background: #fff; color: #0b2547; border: 1px solid #b7c2cf; padding: 10px 20px; border-radius: 3px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+    .lp-btn-ghost:hover { background: #f0f4f8; }
+    .lp-hero-info { display: flex; gap: 24px; flex-wrap: wrap; border-top: 1px solid #d7dde3; padding-top: 18px; }
+    .lp-info-item { font-size: 12px; color: #5b6774; }
+    .lp-info-item strong { display: block; font-size: 13px; color: #0b2547; margin-bottom: 2px; }
 
-    .lp-kiosk { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 20px; }
-    .lp-kiosk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-    .lp-kiosk-title { font-size: 11px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: #D9A653; }
-    .lp-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.2); animation: lppulse 2.5s infinite; display: inline-block; }
-    @keyframes lppulse { 0%,100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.2); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0.08); } }
-    .lp-search-bar { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-    .lp-card { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+    /* ---------- Directory card (Moodle-style boxed panel) ---------- */
+    .lp-panel { background: #fff; border: 1px solid #d7dde3; border-radius: 4px; }
+    .lp-panel-header { background: #0b2547; color: #fff; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0; }
+    .lp-panel-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+    .lp-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; display: inline-block; }
+    .lp-panel-body { padding: 16px; }
+    .lp-search-bar { background: #f4f6f8; border: 1px solid #d7dde3; border-radius: 3px; padding: 9px 12px; font-size: 13px; color: #8492a3; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .lp-card { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e5e9ee; border-radius: 3px; padding: 10px 12px; margin-bottom: 8px; }
     .lp-card:last-child { margin-bottom: 0; }
-    .lp-av { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
-    .lp-av-gold { background: #D9A653; color: #1a2744; }
-    .lp-av-blue { background: #5C7DA6; color: #fff; }
-    .lp-av-green { background: #7BA88A; color: #1a2744; }
+    .lp-av { width: 34px; height: 34px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; color: #fff; }
+    .lp-av-a { background: #0b2547; }
+    .lp-av-b { background: #4c7ab5; }
+    .lp-av-c { background: #7a8c9e; }
     .lp-card-info { flex: 1; min-width: 0; }
-    .lp-card-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 1px; }
-    .lp-card-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
-    .lp-badge { font-size: 10px; padding: 3px 9px; border-radius: 20px; font-weight: 600; white-space: nowrap; }
-    .lp-badge-green { background: rgba(16,185,129,0.15); color: #34d399; }
-    .lp-badge-amber { background: rgba(245,158,11,0.15); color: #fbbf24; }
-    .lp-badge-gray { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.4); }
+    .lp-card-name { font-size: 13px; font-weight: 700; color: #29303a; margin-bottom: 1px; }
+    .lp-card-sub { font-size: 11px; color: #7c8798; }
+    .lp-badge { font-size: 10px; padding: 3px 9px; border-radius: 3px; font-weight: 700; white-space: nowrap; }
+    .lp-badge-green { background: #e4f7ea; color: #1e8e4f; }
+    .lp-badge-amber { background: #fdf0dd; color: #b8762a; }
+    .lp-badge-gray { background: #eef1f4; color: #64707f; }
 
-    .lp-features { background: #fff; padding: 80px 24px; border-bottom: 1px solid #e2e8f0; }
-    .lp-features-inner { max-width: 1100px; margin: 0 auto; }
-    .lp-section-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #D9A653; margin-bottom: 8px; }
-    .lp-section-title { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 800; color: #1a2744; margin-bottom: 8px; letter-spacing: -0.01em; }
-    .lp-section-sub { font-size: 14px; color: #64748b; max-width: 520px; margin-bottom: 36px; }
-    .lp-feat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
-    .lp-feat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 16px; transition: all 0.2s; }
-    .lp-feat-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(26,39,68,0.1); }
-    .lp-feat-icon { width: 36px; height: 36px; background: #1a2744; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; margin-bottom: 12px; }
-    .lp-feat-card h3 { font-size: 13px; font-weight: 700; color: #1a2744; margin-bottom: 6px; }
-    .lp-feat-card p { font-size: 13px; color: #64748b; line-height: 1.6; }
+    /* ---------- Features ---------- */
+    .lp-features { background: #fff; padding: 56px 20px; border-bottom: 1px solid #d7dde3; }
+    .lp-features-inner { max-width: 1140px; margin: 0 auto; }
+    .lp-section-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #b8762a; margin-bottom: 6px; }
+    .lp-section-title { font-size: clamp(1.3rem, 2vw, 1.6rem); font-weight: 700; color: #0b2547; margin-bottom: 6px; }
+    .lp-section-sub { font-size: 13px; color: #5b6774; max-width: 560px; margin-bottom: 28px; }
+    .lp-feat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: #d7dde3; border: 1px solid #d7dde3; }
+    .lp-feat-card { background: #fff; padding: 20px 18px; }
+    .lp-feat-icon { width: 32px; height: 32px; background: #e7edf4; border: 1px solid #d7dde3; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-bottom: 12px; }
+    .lp-feat-card h3 { font-size: 13px; font-weight: 700; color: #0b2547; margin-bottom: 6px; }
+    .lp-feat-card p { font-size: 12.5px; color: #5b6774; line-height: 1.6; }
 
-    .lp-steps { padding: 80px 24px; background: #f8fafc; }
-    .lp-steps-inner { max-width: 1100px; margin: 0 auto; }
-    .lp-steps-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; margin-top: 36px; }
-    .lp-step { position: relative; }
-    .lp-step-num { width: 34px; height: 34px; background: #1a2744; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; margin-bottom: 12px; position: relative; z-index: 1; }
-    .lp-step h3 { font-size: 13px; font-weight: 700; color: #1a2744; margin-bottom: 5px; }
-    .lp-step p { font-size: 13px; color: #64748b; line-height: 1.6; }
-    .lp-step-line { position: absolute; top: 17px; left: 34px; right: -20px; height: 1px; background: #e2e8f0; }
-    .lp-step:last-child .lp-step-line { display: none; }
+    /* ---------- Steps ---------- */
+    .lp-steps { padding: 56px 20px; background: #f4f6f8; }
+    .lp-steps-inner { max-width: 1140px; margin: 0 auto; }
+    .lp-steps-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: #d7dde3; border: 1px solid #d7dde3; margin-top: 26px; }
+    .lp-step { background: #fff; padding: 18px; position: relative; }
+    .lp-step-num { width: 26px; height: 26px; background: #0b2547; color: #fff; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; margin-bottom: 10px; }
+    .lp-step h3 { font-size: 13px; font-weight: 700; color: #0b2547; margin-bottom: 5px; }
+    .lp-step p { font-size: 12.5px; color: #5b6774; line-height: 1.6; }
 
-    .lp-cta { background: #1a2744; padding: 72px 24px; text-align: center; }
-    .lp-cta h2 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 800; color: #fff; margin-bottom: 10px; letter-spacing: -0.01em; }
-    .lp-cta p { color: rgba(255,255,255,0.6); font-size: 14px; max-width: 400px; margin: 0 auto 24px; }
-    .lp-cta-btns { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    /* ---------- CTA ---------- */
+    .lp-cta { background: #0b2547; padding: 52px 20px; text-align: center; }
+    .lp-cta h2 { font-size: clamp(1.3rem, 2vw, 1.6rem); font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .lp-cta p { color: rgba(255,255,255,0.65); font-size: 13px; max-width: 420px; margin: 0 auto 20px; }
+    .lp-cta-btns { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+    .lp-cta .lp-btn-primary { background: #c9a35c; border-color: #c9a35c; color: #0b2547; }
+    .lp-cta .lp-btn-primary:hover { background: #b8914c; }
+    .lp-cta .lp-btn-ghost { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.3); }
+    .lp-cta .lp-btn-ghost:hover { background: rgba(255,255,255,0.16); }
 
-    .lp-footer { background: #fff; border-top: 1px solid #e2e8f0; padding: 40px 24px 24px; }
-    .lp-footer-inner { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 24px; margin-bottom: 20px; }
-    .lp-footer-brand p { color: #64748b; font-size: 13px; max-width: 240px; margin-top: 8px; line-height: 1.6; }
-    .lp-footer-links { display: flex; gap: 40px; flex-wrap: wrap; }
-    .lp-footer-col h4 { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #94a3b8; margin-bottom: 10px; }
-    .lp-footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-    .lp-footer-col a { color: #475569; text-decoration: none; font-size: 13px; }
-    .lp-footer-col a:hover { color: #1a2744; }
-    .lp-footer-bottom { border-top: 1px solid #e2e8f0; padding-top: 16px; max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #94a3b8; }
+    /* ---------- Footer (mirrors AMS / eLearning footer structure) ---------- */
+    .lp-footer { background: #fff; padding: 40px 20px 0; }
+    .lp-footer-inner { max-width: 1140px; margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 28px; padding-bottom: 24px; }
+    .lp-footer-brand { max-width: 300px; }
+    .lp-footer-brand p { color: #5b6774; font-size: 12.5px; margin-top: 10px; line-height: 1.7; }
+    .lp-footer-brand a.lp-readmore { display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 700; }
+    .lp-footer-links { display: flex; gap: 48px; flex-wrap: wrap; }
+    .lp-footer-col h4 { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0b2547; margin-bottom: 10px; }
+    .lp-footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .lp-footer-col a { color: #445064; text-decoration: none; font-size: 12.5px; }
+    .lp-footer-col a:hover { color: #0b2547; text-decoration: underline; }
+    .lp-footer-col p { color: #445064; font-size: 12.5px; line-height: 1.7; }
+    .lp-footer-bottom { border-top: 1px solid #d7dde3; padding: 14px 0; max-width: 1140px; margin: 0 auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: #8492a3; }
 
     @media (max-width: 900px) {
-      .lp-hero-inner { grid-template-columns: 1fr; gap: 40px; }
+      .lp-hero-inner { grid-template-columns: 1fr; gap: 28px; }
       .lp-feat-grid { grid-template-columns: repeat(2,1fr); }
       .lp-steps-grid { grid-template-columns: repeat(2,1fr); }
-      .lp-step-line { display: none; }
     }
     @media (max-width: 640px) {
       .lp-nav-links { display: none; }
+      .lp-topbar-contact { display: none; }
       .lp-feat-grid, .lp-steps-grid { grid-template-columns: 1fr; }
     }
   `;
@@ -121,67 +145,90 @@ const LandingPage = () => {
     <div>
       <style>{css}</style>
 
-      <nav className="lp-nav">
-        <a href="#home" className="lp-logo">
-          <span className="lp-logo-mark">SD</span>
-          SU Directory
-        </a>
-        <div className="lp-nav-links">
-          {[['#features','Features'],['#how-it-works','How it works'],['#about','About']].map(([h,l]) => (
-            <a key={l} href={h} className="lp-nav-link">{l}</a>
-          ))}
+      <div className="lp-topbar">
+        <div className="lp-topbar-inner">
+          <div className="lp-topbar-contact">
+            <span>📞 (+254) (0)703-034000</span>
+            <span>✉ directory@strathmore.edu</span>
+          </div>
+          <div className="lp-topbar-links">
+            <a href="#">University Website</a>
+            <a href="#">AMS</a>
+            <a href="#">eLearning</a>
+            <a href="#">Library</a>
+          </div>
         </div>
-        <div className="lp-nav-right">
-          {isLoggedIn ? (
-            <div className="lp-user-wrap">
-              <div className="lp-user-av">{user?.email?.charAt(0).toUpperCase()}</div>
-              <button className="lp-sign-out" onClick={logout}>Sign out</button>
-            </div>
-          ) : (
-            <>
-              <button className="lp-sign-in" onClick={() => setAuthOpen(true)}>Sign in</button>
-              <button className="lp-cta-btn" onClick={() => setAuthOpen(true)}>Search directory</button>
-            </>
-          )}
+      </div>
+
+      <nav className="lp-nav">
+        <div className="lp-nav-inner">
+          <a href="#home" className="lp-logo">
+            <span className="lp-logo-mark">SD</span>
+            <span>
+              SU Directory
+              <span className="lp-logo-sub">Strathmore University</span>
+            </span>
+          </a>
+          <div className="lp-nav-links">
+            {[['#features','Features'],['#how-it-works','How it works'],['#about','About']].map(([h,l]) => (
+              <a key={l} href={h} className="lp-nav-link">{l}</a>
+            ))}
+          </div>
+          <div className="lp-nav-right">
+            {isLoggedIn ? (
+              <div className="lp-user-wrap">
+                <div className="lp-user-av">{user?.email?.charAt(0).toUpperCase()}</div>
+                <button className="lp-sign-out" onClick={logout}>Sign out</button>
+              </div>
+            ) : (
+              <>
+                <button className="lp-sign-in" onClick={() => setAuthOpen(true)}>Sign in</button>
+                <button className="lp-cta-btn" onClick={() => setAuthOpen(true)}>Search directory</button>
+              </>
+            )}
+          </div>
         </div>
       </nav>
 
       <section className="lp-hero" id="home">
         <div className="lp-hero-inner">
           <div>
-            <div className="lp-hero-badge">📍 Strathmore University · Madaraka, Nairobi</div>
-            <h1>Stop wandering the halls for someone who <em>just</em> left.</h1>
-            <p className="lp-hero-lead">One searchable directory for every lecturer, mentor, administrator and student rep — with live availability and appointment booking, right in your browser.</p>
+            <div className="lp-hero-eyebrow">Madaraka, Nairobi · ICS Project, SCES</div>
+            <h1>One directory for every lecturer, mentor, administrator and student rep.</h1>
+            <p className="lp-hero-lead">Sign in with your Strathmore account to search the directory, check who's available right now, and book an appointment — no more wandering the halls for someone who just left.</p>
             <div className="lp-hero-btns">
-              <button className="lp-btn-primary" onClick={() => setAuthOpen(true)}>Search the directory</button>
+              <button className="lp-btn-primary" onClick={() => setAuthOpen(true)}>Sign in to search</button>
               <a href="#features" className="lp-btn-ghost">See how it works</a>
             </div>
-            <div className="lp-hero-stats">
-              <div className="lp-stat"><strong>4</strong><span>categories</span></div>
-              <div className="lp-stat"><strong>1</strong><span>login</span></div>
-              <div className="lp-stat"><strong>0</strong><span>installs</span></div>
+            <div className="lp-hero-info">
+              <div className="lp-info-item"><strong>4 categories</strong>Lecturers, mentors, admin, reps</div>
+              <div className="lp-info-item"><strong>1 login</strong>Your Strathmore credentials</div>
+              <div className="lp-info-item"><strong>Live status</strong>See who's in and who's free</div>
             </div>
           </div>
-          <div className="lp-kiosk">
-            <div className="lp-kiosk-header">
-              <span className="lp-kiosk-title">Directory</span>
+
+          <div className="lp-panel">
+            <div className="lp-panel-header">
+              <span className="lp-panel-title">Directory preview</span>
               <span className="lp-dot" />
             </div>
-            <div className="lp-search-bar">🔍 Search name, department, role...</div>
-            {[
-              { av: 'lp-av-gold', init: 'AO', name: 'Dr. A. Otieno', sub: 'Computer Science · Block C-412', badge: 'lp-badge-green', status: 'Available' },
-              { av: 'lp-av-blue', init: 'MW', name: 'M. Wanjiru', sub: 'Mentorship · Block A-208', badge: 'lp-badge-amber', status: 'In a meeting' },
-              { av: 'lp-av-green', init: 'FK', name: 'F. Kamau', sub: 'Student Affairs · Block A-103', badge: 'lp-badge-gray', status: 'Hours: 2–4 pm' },
-            ].map((c, i) => (
-              <div key={i} className="lp-card">
-                <div className={`lp-av ${c.av}`}>{c.init}</div>
-                <div className="lp-card-info">
-                  <div className="lp-card-name">{c.name}</div>
-                  <div className="lp-card-sub">{c.sub}</div>
+            <div className="lp-panel-body">
+              <div className="lp-search-bar">🔍 Search name, department, role...</div>
+              {[
+                { av: 'lp-av-a', init: 'AO', name: 'Dr. A. Otieno', sub: 'Computer Science · Block C-412', badge: 'lp-badge-green', status: 'Available' },
+                { av: 'lp-av-b', init: 'MW', name: 'M. Wanjiru', sub: 'Mentorship · Block A-208', badge: 'lp-badge-amber', status: 'In a meeting' },
+                { av: 'lp-av-c', init: 'FK', name: 'F. Kamau', sub: 'Student Affairs · Block A-103', badge: 'lp-badge-gray', status: 'Hours: 2–4 pm' },
+              ].map((c, i) => (
+                <div key={i} className="lp-card">
+                  <div className={`lp-av ${c.av}`}>{c.init}</div>
+                  <div className="lp-card-info">
+                    <div className="lp-card-name">{c.name}</div>
+                    <div className="lp-card-sub">{c.sub}</div>
+                  </div>
+                  <span className={`lp-badge ${c.badge}`}>{c.status}</span>
                 </div>
-                <span className={`lp-badge ${c.badge}`}>{c.status}</span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -222,7 +269,6 @@ const LandingPage = () => {
             ].map((s, i) => (
               <div key={i} className="lp-step">
                 <div className="lp-step-num">{s.n}</div>
-                {i < 3 && <div className="lp-step-line" />}
                 <h3>{s.title}</h3>
                 <p>{s.desc}</p>
               </div>
@@ -243,13 +289,23 @@ const LandingPage = () => {
       <footer className="lp-footer">
         <div className="lp-footer-inner">
           <div className="lp-footer-brand">
-            <a href="#home" className="lp-logo" style={{ color: '#1a2744' }}>
+            <a href="#home" className="lp-logo" style={{ color: '#0b2547' }}>
               <span className="lp-logo-mark">SD</span>
               SU Directory
             </a>
-            <p>A centralised directory and appointment platform for Strathmore University.</p>
+            <p>A centralised directory and appointment platform for Strathmore University, built to help students reach the right lecturer, mentor, administrator or student rep without the guesswork.</p>
+            <a href="#about" className="lp-readmore">Read more »</a>
           </div>
           <div className="lp-footer-links">
+            <div className="lp-footer-col">
+              <h4>Info</h4>
+              <ul>
+                <li><a href="#">Library</a></li>
+                <li><a href="#">Webmail</a></li>
+                <li><a href="#">AMS Students' Module</a></li>
+                <li><a href="#">Digital Repository</a></li>
+              </ul>
+            </div>
             <div className="lp-footer-col">
               <h4>Navigate</h4>
               <ul>
@@ -259,17 +315,15 @@ const LandingPage = () => {
               </ul>
             </div>
             <div className="lp-footer-col">
-              <h4>Campus</h4>
-              <ul>
-                <li><a href="#">Ole Sangale Road, Madaraka</a></li>
-                <li><a href="#">Nairobi, Kenya</a></li>
-              </ul>
+              <h4>Contact Us</h4>
+              <p>Madaraka Estate, Ole Sangale Road<br/>PO Box 59857, 00200<br/>Nairobi, Kenya</p>
+              <p style={{ marginTop: 8 }}>Phone: (+254) (0)703-034000<br/>Email: directory@strathmore.edu</p>
             </div>
           </div>
         </div>
         <div className="lp-footer-bottom">
-          <span>© 2026 Strathmore Directory · ICS Project, SCES</span>
-          <span>React · Node.js · SQL Server</span>
+          <span>Copyright © 2026 - Strathmore University Directory. All Rights Reserved.</span>
+          <span>ICS Project, SCES · React · Node.js · SQL Server</span>
         </div>
       </footer>
 

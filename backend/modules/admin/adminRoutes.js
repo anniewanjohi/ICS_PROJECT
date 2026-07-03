@@ -28,8 +28,8 @@ router.get('/my-profile', async (req, res) => {
     }
 });
 
-// PATCH /api/v1/admin/my-profile
-router.patch('/my-profile', async (req, res) => {
+// POST /api/v1/admin/change-password - Separate endpoint for password change
+router.post('/change-password', async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
 
@@ -65,8 +65,8 @@ router.patch('/my-profile', async (req, res) => {
         await logAction(req.user.userId, 'ADMIN_PASSWORD_CHANGED', 'users', req.user.userId, req);
         return res.status(200).json({ success: true, message: 'Password updated successfully' });
     } catch (error) {
-        console.error('Update admin profile error:', error);
-        return res.status(500).json({ success: false, message: 'Error updating admin profile' });
+        console.error('Update admin password error:', error);
+        return res.status(500).json({ success: false, message: 'Error updating password' });
     }
 });
 
@@ -296,10 +296,77 @@ router.post('/departments', async (req, res) => {
                 OUTPUT INSERTED.*
                 VALUES (@department_name, @department_code, @faculty, @office_location, @description, GETDATE())
             `);
+        await logAction(req.user.userId, 'DEPARTMENT_CREATED', 'departments', result.recordset[0].department_id, req);
         return res.status(201).json({ success: true, message: 'Department created', data: result.recordset[0] });
     } catch (error) {
         console.error('Create department error:', error);
         return res.status(500).json({ success: false, message: 'Error creating department' });
+    }
+});
+
+// PUT /api/v1/admin/departments/:id
+router.put('/departments/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { departmentName, departmentCode, faculty, officeLocation, description } = req.body;
+        
+        const pool = getPool();
+        const result = await pool.request()
+            .input('department_id', sql.Int, parseInt(id))
+            .input('department_name', sql.VarChar, departmentName)
+            .input('department_code', sql.VarChar, departmentCode)
+            .input('faculty', sql.VarChar, faculty)
+            .input('office_location', sql.Text, officeLocation || null)
+            .input('description', sql.Text, description || null)
+            .query(`
+                UPDATE dbo.departments 
+                SET 
+                    department_name = @department_name,
+                    department_code = @department_code,
+                    faculty = @faculty,
+                    office_location = @office_location,
+                    description = @description,
+                    updated_at = GETDATE()
+                OUTPUT INSERTED.*
+                WHERE department_id = @department_id
+            `);
+        
+        if (!result.recordset[0]) {
+            return res.status(404).json({ success: false, message: 'Department not found' });
+        }
+        
+        await logAction(req.user.userId, 'DEPARTMENT_UPDATED', 'departments', parseInt(id), req);
+        return res.status(200).json({ success: true, message: 'Department updated', data: result.recordset[0] });
+    } catch (error) {
+        console.error('Update department error:', error);
+        return res.status(500).json({ success: false, message: 'Error updating department' });
+    }
+});
+
+// DELETE /api/v1/admin/departments/:id
+router.delete('/departments/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = getPool();
+        
+        // Check if department has staff
+        const check = await pool.request()
+            .input('department_id', sql.Int, parseInt(id))
+            .query('SELECT COUNT(*) AS count FROM dbo.staff_profiles WHERE department_id = @department_id');
+        
+        if (check.recordset[0].count > 0) {
+            return res.status(400).json({ success: false, message: 'Cannot delete department with assigned staff' });
+        }
+        
+        await pool.request()
+            .input('department_id', sql.Int, parseInt(id))
+            .query('DELETE FROM dbo.departments WHERE department_id = @department_id');
+        
+        await logAction(req.user.userId, 'DEPARTMENT_DELETED', 'departments', parseInt(id), req);
+        return res.status(200).json({ success: true, message: 'Department deleted' });
+    } catch (error) {
+        console.error('Delete department error:', error);
+        return res.status(500).json({ success: false, message: 'Error deleting department' });
     }
 });
 
