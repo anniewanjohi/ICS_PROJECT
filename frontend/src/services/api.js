@@ -15,7 +15,8 @@ const handle = async (res) => {
 };
 
 export const api = {
-    // ─── AUTH ────────────────────────────────────────────────
+
+    // AUTH
     login: async (email, password) => {
         try {
             const res = await fetch(`${API_URL}/auth/login`, {
@@ -31,7 +32,6 @@ export const api = {
 
     register: async (userData) => {
         try {
-            // Fix field names to match backend (camelCase)
             const payload = {
                 email: userData.email,
                 password: userData.password,
@@ -88,7 +88,7 @@ export const api = {
         }
     },
 
-    // ─── DIRECTORY ───────────────────────────────────────────
+    // DIRECTORY
     searchDirectory: async ({ query = '', staffType = '', departmentId = '', page = 1, limit = 12 } = {}) => {
         try {
             const params = new URLSearchParams({ query, staffType, departmentId, page, limit });
@@ -117,7 +117,7 @@ export const api = {
         }
     },
 
-    // ─── APPOINTMENTS ────────────────────────────────────────
+    // APPOINTMENTS
     getAvailableSlots: async (staffId) => {
         try {
             const res = await fetch(`${API_URL}/appointments/slots/${staffId}`, { headers: authHeaders() });
@@ -176,7 +176,7 @@ export const api = {
         }
     },
 
-    // ─── NOTIFICATIONS ───────────────────────────────────────
+    // NOTIFICATIONS
     getNotifications: async (unreadOnly = false) => {
         try {
             const res = await fetch(`${API_URL}/notifications?unreadOnly=${unreadOnly}`, { headers: authHeaders() });
@@ -210,7 +210,7 @@ export const api = {
         }
     },
 
-    // ─── STAFF ───────────────────────────────────────────────
+    // STAFF
     getMyStaffProfile: async () => {
         try {
             const res = await fetch(`${API_URL}/staff/profile`, { headers: authHeaders() });
@@ -267,7 +267,7 @@ export const api = {
         }
     },
 
-    // ─── ADMIN ───────────────────────────────────────────────
+    // ADMIN
     getAdminStats: async () => {
         try {
             const res = await fetch(`${API_URL}/admin/stats`, { headers: authHeaders() });
@@ -326,6 +326,18 @@ export const api = {
         }
     },
 
+    deleteUser: async (userId) => {
+        try {
+            const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            });
+            return handle(res);
+        } catch {
+            return { success: false, message: 'Failed to delete user' };
+        }
+    },
+
     getAdminLogs: async ({ page = 1, limit = 50 } = {}) => {
         try {
             const params = new URLSearchParams({ page, limit });
@@ -357,15 +369,26 @@ export const api = {
             return { success: false, message: 'Failed to create department' };
         }
     },
-    deleteUser: async (userId) => {
-    try {
-        const res = await fetch(`${API_URL}/admin/users/${userId}`, {
-            method: 'DELETE',
-            headers: authHeaders(),
-        });
-        return handle(res);
-    } catch {
-        return { success: false, message: 'Failed to delete user' };
-    }
-},
+
+    getMyAdminProfile: async () => {
+        try {
+            const res = await fetch(`${API_URL}/admin/my-profile`, { headers: authHeaders() });
+            return handle(res);
+        } catch {
+            return { success: false, message: 'Failed to fetch admin profile' };
+        }
+    },
+
+    updateMyAdminPassword: async (currentPassword, newPassword) => {
+        try {
+            const res = await fetch(`${API_URL}/admin/my-profile`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify({ currentPassword, newPassword }),
+            });
+            return handle(res);
+        } catch {
+            return { success: false, message: 'Failed to update password' };
+        }
+    },
 };

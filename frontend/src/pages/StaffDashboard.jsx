@@ -42,6 +42,12 @@ export default function StaffDashboard() {
     const [editMode, setEditMode] = useState(false);
     const [departments, setDepartments] = useState([]);
 
+    // Directory state
+    const [dirQuery, setDirQuery] = useState('');
+    const [dirTypeFilter, setDirTypeFilter] = useState('');
+    const [dirResults, setDirResults] = useState([]);
+    const [dirLoading, setDirLoading] = useState(false);
+
     const [profileForm, setProfileForm] = useState({
         firstName: '', lastName: '', title: '', position: '', staffType: 'lecturer',
         isMentor: false, officeLocation: '', officeHours: '', officialEmail: '',
@@ -51,7 +57,7 @@ export default function StaffDashboard() {
 
     const [slotForm, setSlotForm] = useState({
         dayOfWeek: '', startTime: '', endTime: '', slotDuration: 30,
-        location: '', isRecurring: true, specificDate: ''
+        location: '', isRecurring: true, specificDate: '', meetingLink: ''
     });
 
     useEffect(() => { loadAppointments(); loadNotifications(); }, []);
@@ -96,12 +102,19 @@ export default function StaffDashboard() {
         if (res.success) { setNotifications(res.data.notifications); setUnreadCount(res.data.unreadCount); }
     };
 
+    const handleDirectorySearch = async () => {
+        setDirLoading(true);
+        const res = await api.searchDirectory({ query: dirQuery, staffType: dirTypeFilter, page: 1, limit: 20 });
+        if (res.success) setDirResults(res.data.staff);
+        setDirLoading(false);
+    };
+
     const handleViewChange = (v) => {
         setView(v); setMsg(''); setError(''); setEditMode(false);
         if (v === 'profile' && !profile) loadProfile();
-        if (v === 'profile' && !departments.length) loadProfile();
         if (v === 'availability') loadSlots();
         if (v === 'notifications') loadNotifications();
+        if (v === 'directory') handleDirectorySearch();
     };
 
     const handleRespond = async (appointmentId, status) => {
@@ -121,11 +134,17 @@ export default function StaffDashboard() {
 
     const handleAddSlot = async (e) => {
         e.preventDefault(); setLoading(true); setMsg(''); setError('');
+        const isOnline = slotForm.location.toLowerCase().includes('online');
+        if (isOnline && !slotForm.meetingLink) {
+            setError('A Google Meet link is required for online slots.');
+            setLoading(false);
+            return;
+        }
         const res = await api.addAvailabilitySlot(slotForm);
         if (res.success) {
             setMsg('Slot added.');
             loadSlots();
-            setSlotForm({ dayOfWeek: '', startTime: '', endTime: '', slotDuration: 30, location: '', isRecurring: true, specificDate: '' });
+            setSlotForm({ dayOfWeek: '', startTime: '', endTime: '', slotDuration: 30, location: '', isRecurring: true, specificDate: '', meetingLink: '' });
         } else setError(res.message || 'Failed to add slot.');
         setLoading(false);
     };
@@ -140,6 +159,8 @@ export default function StaffDashboard() {
     const pending = appointments.filter(a => a.status === 'pending');
     const upcoming = appointments.filter(a => a.status === 'confirmed' && new Date(a.appointment_date) >= new Date());
 
+    const isOnlineSlot = slotForm.location.toLowerCase().includes('online');
+
     return (
         <div style={styles.container}>
             <nav style={styles.navbar}>
@@ -150,6 +171,7 @@ export default function StaffDashboard() {
                     </button>
                     <button style={styles.navBtn(view === 'profile')} onClick={() => handleViewChange('profile')}>My Profile</button>
                     <button style={styles.navBtn(view === 'availability')} onClick={() => handleViewChange('availability')}>Availability</button>
+                    <button style={styles.navBtn(view === 'directory')} onClick={() => handleViewChange('directory')}>Directory</button>
                     <button style={styles.navBtn(view === 'notifications')} onClick={() => handleViewChange('notifications')}>
                         Notifications {unreadCount > 0 && <span style={{ background: '#ef4444', borderRadius: '50%', padding: '1px 6px', fontSize: 10, marginLeft: 4 }}>{unreadCount}</span>}
                     </button>
@@ -161,13 +183,14 @@ export default function StaffDashboard() {
             </nav>
 
             <main style={styles.main}>
-                {/* ── APPOINTMENTS ── */}
+
+                {/* APPOINTMENTS */}
                 {view === 'appointments' && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 20 }}>Appointment Inbox</h1>
                         {pending.length > 0 && (
                             <div style={{ marginBottom: 24 }}>
-                                <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 12 }}>⏳ Pending ({pending.length})</div>
+                                <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 12 }}>Pending requests ({pending.length})</div>
                                 {pending.map(appt => (
                                     <div key={appt.appointment_id} style={{ ...styles.card, borderLeft: '4px solid #f59e0b' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -178,14 +201,15 @@ export default function StaffDashboard() {
                                                 </div>
                                                 <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{appt.program} · Year {appt.year_of_study}</div>
                                                 <div style={{ fontSize: 13, color: '#475569', marginBottom: 4 }}>
-                                                    📅 {new Date(appt.appointment_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {appt.start_time?.substring(0, 5)} – {appt.end_time?.substring(0, 5)}
+                                                    {new Date(appt.appointment_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {appt.start_time?.substring(0, 5)} – {appt.end_time?.substring(0, 5)}
                                                 </div>
-                                                <div style={{ fontSize: 13, color: '#475569' }}>📝 {appt.purpose}</div>
+                                                <div style={{ fontSize: 13, color: '#475569' }}>Purpose: {appt.purpose}</div>
                                                 {appt.additional_notes && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Note: {appt.additional_notes}</div>}
+                                                {appt.meeting_link && <div style={{ fontSize: 12, color: '#1a2744', marginTop: 4 }}>Meet: <a href={appt.meeting_link} target="_blank" rel="noopener noreferrer">{appt.meeting_link}</a></div>}
                                             </div>
                                             <div style={{ display: 'flex', gap: 8 }}>
-                                                <button onClick={() => handleRespond(appt.appointment_id, 'confirmed')} style={styles.btn('#10b981')}>✓ Confirm</button>
-                                                <button onClick={() => handleRespond(appt.appointment_id, 'declined')} style={{ background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '9px 18px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>✕ Decline</button>
+                                                <button onClick={() => handleRespond(appt.appointment_id, 'confirmed')} style={styles.btn('#10b981')}>Confirm</button>
+                                                <button onClick={() => handleRespond(appt.appointment_id, 'declined')} style={{ background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '9px 18px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Decline</button>
                                             </div>
                                         </div>
                                     </div>
@@ -193,7 +217,7 @@ export default function StaffDashboard() {
                             </div>
                         )}
                         <div>
-                            <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 12 }}>📅 Upcoming confirmed ({upcoming.length})</div>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 12 }}>Upcoming confirmed ({upcoming.length})</div>
                             {upcoming.length === 0 ? (
                                 <div style={{ ...styles.card, color: '#64748b', textAlign: 'center', padding: 30 }}>No upcoming appointments.</div>
                             ) : upcoming.map(appt => (
@@ -202,30 +226,32 @@ export default function StaffDashboard() {
                                     <div style={{ fontSize: 13, color: '#64748b' }}>
                                         {new Date(appt.appointment_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {appt.start_time?.substring(0, 5)} – {appt.end_time?.substring(0, 5)}
                                     </div>
-                                    <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>📝 {appt.purpose}</div>
+                                    <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>Purpose: {appt.purpose}</div>
+                                    {appt.meeting_link && (
+                                        <div style={{ fontSize: 12, marginTop: 4 }}>
+                                            <a href={appt.meeting_link} target="_blank" rel="noopener noreferrer" style={{ color: '#1a2744', fontWeight: 600 }}>Join Google Meet</a>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* ── PROFILE ── */}
+                {/* MY PROFILE */}
                 {view === 'profile' && (
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>My Profile</h1>
                             <button style={editMode ? styles.btnOutline : styles.btn()} onClick={() => { setEditMode(!editMode); setMsg(''); setError(''); }}>
-                                {editMode ? 'Cancel' : '✏️ Edit profile'}
+                                {editMode ? 'Cancel' : 'Edit profile'}
                             </button>
                         </div>
-
                         {msg && <div style={styles.alert('success')}>{msg}</div>}
                         {error && <div style={styles.alert('error')}>{error}</div>}
-
                         {!profile ? (
                             <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Loading...</div>
                         ) : !editMode ? (
-                            /* VIEW MODE */
                             <div style={styles.card}>
                                 <div style={{ display: 'flex', gap: 20, marginBottom: 20, alignItems: 'flex-start' }}>
                                     <Avatar name={`${profile.first_name} ${profile.last_name}`} size={72} />
@@ -237,7 +263,7 @@ export default function StaffDashboard() {
                                         <div style={{ fontSize: 13, color: '#94a3b8' }}>{profile.department_name} · {profile.faculty}</div>
                                         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                                             <span style={{ background: '#1a274418', color: '#1a2744', border: '1px solid #1a274440', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>
-                                                {({ lecturer: 'Lecturer', mentor: 'Mentor', administrative: 'Admin Staff', student_representative: 'Student Rep' }[profile.staff_type] || profile.staff_type)}
+                                                {({ lecturer: 'Lecturer', administrative: 'Admin Staff', student_representative: 'Student Rep' }[profile.staff_type] || profile.staff_type)}
                                             </span>
                                             {(profile.is_mentor === 1 || profile.is_mentor === true) && (
                                                 <span style={{ background: '#7c3aed18', color: '#7c3aed', border: '1px solid #7c3aed40', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>Mentor</span>
@@ -245,39 +271,21 @@ export default function StaffDashboard() {
                                         </div>
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
                                     {profile.office_location && <div><span style={{ color: '#64748b', fontWeight: 600, width: 140, display: 'inline-block' }}>Office</span>{profile.office_location}</div>}
                                     {profile.office_hours && <div><span style={{ color: '#64748b', fontWeight: 600, width: 140, display: 'inline-block' }}>Office hours</span>{profile.office_hours}</div>}
                                     {profile.official_email && <div><span style={{ color: '#64748b', fontWeight: 600, width: 140, display: 'inline-block' }}>Email</span>{profile.official_email}</div>}
-                                    {profile.phone_extension && <div><span style={{ color: '#64748b', fontWeight: 600, width: 140, display: 'inline-block' }}>Phone ext.</span>{profile.phone_extension}</div>}
-                                    {profile.areas_of_specialization && (
-                                        <div style={{ marginTop: 8 }}>
-                                            <div style={{ color: '#64748b', fontWeight: 600, marginBottom: 4 }}>Areas of specialisation</div>
-                                            <div style={{ color: '#475569', lineHeight: 1.6 }}>{profile.areas_of_specialization}</div>
-                                        </div>
-                                    )}
-                                    {profile.biography && (
-                                        <div style={{ marginTop: 8 }}>
-                                            <div style={{ color: '#64748b', fontWeight: 600, marginBottom: 4 }}>About</div>
-                                            <div style={{ color: '#475569', lineHeight: 1.6 }}>{profile.biography}</div>
-                                        </div>
-                                    )}
+                                    {profile.phone_extension && <div><span style={{ color: '#64748b', fontWeight: 600, width: 140, display: 'inline-block' }}>Phone</span>{profile.phone_extension}</div>}
+                                    {profile.areas_of_specialization && <div style={{ marginTop: 8 }}><div style={{ color: '#64748b', fontWeight: 600, marginBottom: 4 }}>Areas of specialisation</div><div style={{ color: '#475569', lineHeight: 1.6 }}>{profile.areas_of_specialization}</div></div>}
+                                    {profile.biography && <div style={{ marginTop: 8 }}><div style={{ color: '#64748b', fontWeight: 600, marginBottom: 4 }}>About</div><div style={{ color: '#475569', lineHeight: 1.6 }}>{profile.biography}</div></div>}
                                 </div>
                             </div>
                         ) : (
-                            /* EDIT MODE */
                             <form onSubmit={handleProfileSave}>
                                 <div style={styles.card}>
-                                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1a2744', marginBottom: 14 }}>Basic information</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                        <div>
-                                            <label style={styles.label}>First name</label>
-                                            <input style={styles.input} value={profileForm.firstName} onChange={e => setProfileForm(p => ({ ...p, firstName: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Last name</label>
-                                            <input style={styles.input} value={profileForm.lastName} onChange={e => setProfileForm(p => ({ ...p, lastName: e.target.value }))} />
-                                        </div>
+                                        <div><label style={styles.label}>First name</label><input style={styles.input} value={profileForm.firstName} onChange={e => setProfileForm(p => ({ ...p, firstName: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Last name</label><input style={styles.input} value={profileForm.lastName} onChange={e => setProfileForm(p => ({ ...p, lastName: e.target.value }))} /></div>
                                         <div>
                                             <label style={styles.label}>Title</label>
                                             <select style={styles.input} value={profileForm.title} onChange={e => setProfileForm(p => ({ ...p, title: e.target.value }))}>
@@ -289,10 +297,7 @@ export default function StaffDashboard() {
                                                 <option value="Mrs.">Mrs.</option>
                                             </select>
                                         </div>
-                                        <div>
-                                            <label style={styles.label}>Position</label>
-                                            <input style={styles.input} placeholder="e.g. Senior Lecturer" value={profileForm.position} onChange={e => setProfileForm(p => ({ ...p, position: e.target.value }))} />
-                                        </div>
+                                        <div><label style={styles.label}>Position</label><input style={styles.input} placeholder="e.g. Senior Lecturer" value={profileForm.position} onChange={e => setProfileForm(p => ({ ...p, position: e.target.value }))} /></div>
                                         <div>
                                             <label style={styles.label}>Staff type</label>
                                             <select style={styles.input} value={profileForm.staffType} onChange={e => setProfileForm(p => ({ ...p, staffType: e.target.value }))}>
@@ -308,52 +313,33 @@ export default function StaffDashboard() {
                                                 {departments.map(d => <option key={d.department_id} value={d.department_id}>{d.department_name}</option>)}
                                             </select>
                                         </div>
-                                        <div>
-                                            <label style={styles.label}>Office location</label>
-                                            <input style={styles.input} placeholder="e.g. Block C, Room 214" value={profileForm.officeLocation} onChange={e => setProfileForm(p => ({ ...p, officeLocation: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Office hours</label>
-                                            <input style={styles.input} placeholder="e.g. Mon–Fri 9am–12pm" value={profileForm.officeHours} onChange={e => setProfileForm(p => ({ ...p, officeHours: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Official email</label>
-                                            <input style={styles.input} type="email" value={profileForm.officialEmail} onChange={e => setProfileForm(p => ({ ...p, officialEmail: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Phone extension (optional)</label>
-                                            <input style={styles.input} placeholder="e.g. +254 703 034 201" value={profileForm.phoneExtension} onChange={e => setProfileForm(p => ({ ...p, phoneExtension: e.target.value }))} />
-                                        </div>
+                                        <div><label style={styles.label}>Office location</label><input style={styles.input} placeholder="e.g. Block C, Room 214" value={profileForm.officeLocation} onChange={e => setProfileForm(p => ({ ...p, officeLocation: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Office hours</label><input style={styles.input} placeholder="e.g. Mon–Fri 9am–12pm" value={profileForm.officeHours} onChange={e => setProfileForm(p => ({ ...p, officeHours: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Official email</label><input style={styles.input} type="email" value={profileForm.officialEmail} onChange={e => setProfileForm(p => ({ ...p, officialEmail: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Phone number (optional)</label><input style={styles.input} placeholder="+254..." value={profileForm.phoneExtension} onChange={e => setProfileForm(p => ({ ...p, phoneExtension: e.target.value }))} /></div>
                                     </div>
-
-                                    {/* Mentor toggle */}
                                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, marginBottom: 12, background: '#f8fafc' }}>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                                             <input type="checkbox" checked={!!profileForm.isMentor} onChange={e => setProfileForm(p => ({ ...p, isMentor: e.target.checked }))} />
                                             <div>
                                                 <div style={{ fontWeight: 600, fontSize: 13, color: '#1a2744' }}>I also offer mentorship</div>
-                                                <div style={{ fontSize: 11, color: '#64748b' }}>You will also appear under the Mentors filter in the directory.</div>
+                                                <div style={{ fontSize: 11, color: '#64748b' }}>You will appear under the Mentors filter in the directory.</div>
                                             </div>
                                         </label>
                                     </div>
-
-                                    {/* Available for booking toggle */}
                                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, marginBottom: 16, background: '#f8fafc' }}>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                                             <input type="checkbox" checked={!!profileForm.isAvailableForBooking} onChange={e => setProfileForm(p => ({ ...p, isAvailableForBooking: e.target.checked }))} />
                                             <div>
                                                 <div style={{ fontWeight: 600, fontSize: 13, color: '#1a2744' }}>Available for appointment bookings</div>
-                                                <div style={{ fontSize: 11, color: '#64748b' }}>Uncheck to temporarily hide yourself from student booking requests.</div>
+                                                <div style={{ fontSize: 11, color: '#64748b' }}>Uncheck to hide yourself from student booking requests.</div>
                                             </div>
                                         </label>
                                     </div>
-
                                     <label style={styles.label}>Areas of specialisation</label>
-                                    <input style={styles.input} placeholder="e.g. Automata Theory, Algorithms, Software Engineering" value={profileForm.areasOfSpecialization} onChange={e => setProfileForm(p => ({ ...p, areasOfSpecialization: e.target.value }))} />
-
+                                    <input style={styles.input} placeholder="e.g. Algorithms, Software Engineering" value={profileForm.areasOfSpecialization} onChange={e => setProfileForm(p => ({ ...p, areasOfSpecialization: e.target.value }))} />
                                     <label style={styles.label}>About / Biography</label>
                                     <textarea style={styles.textarea} placeholder="A brief bio about yourself..." value={profileForm.biography} onChange={e => setProfileForm(p => ({ ...p, biography: e.target.value }))} />
-
                                     <button type="submit" style={styles.btn()} disabled={loading}>{loading ? 'Saving...' : 'Save changes'}</button>
                                 </div>
                             </form>
@@ -361,13 +347,12 @@ export default function StaffDashboard() {
                     </div>
                 )}
 
-                {/* ── AVAILABILITY ── */}
+                {/* AVAILABILITY */}
                 {view === 'availability' && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 20 }}>Availability Slots</h1>
                         {msg && <div style={styles.alert('success')}>{msg}</div>}
                         {error && <div style={styles.alert('error')}>{error}</div>}
-
                         <div style={styles.card}>
                             <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 16 }}>Add new slot</div>
                             <form onSubmit={handleAddSlot}>
@@ -405,14 +390,20 @@ export default function StaffDashboard() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                                     <div>
-                                        <label style={styles.label}>Location (optional)</label>
-                                        <input style={{ ...styles.input, marginBottom: 0 }} placeholder="e.g. Office, Online" value={slotForm.location} onChange={e => setSlotForm(p => ({ ...p, location: e.target.value }))} />
+                                        <label style={styles.label}>Location</label>
+                                        <input style={{ ...styles.input, marginBottom: 0 }} placeholder="e.g. Office Block C, Online" value={slotForm.location} onChange={e => setSlotForm(p => ({ ...p, location: e.target.value }))} />
                                     </div>
                                     <div>
                                         <label style={styles.label}>Duration (minutes)</label>
                                         <input type="number" style={{ ...styles.input, marginBottom: 0 }} value={slotForm.slotDuration} min={15} max={120} step={15} onChange={e => setSlotForm(p => ({ ...p, slotDuration: parseInt(e.target.value) }))} />
                                     </div>
                                 </div>
+                                {isOnlineSlot && (
+                                    <div style={{ marginTop: 10 }}>
+                                        <label style={styles.label}>Google Meet link * (required for online slots)</label>
+                                        <input style={{ ...styles.input, marginBottom: 0 }} placeholder="https://meet.google.com/xxx-xxxx-xxx" value={slotForm.meetingLink} onChange={e => setSlotForm(p => ({ ...p, meetingLink: e.target.value }))} />
+                                    </div>
+                                )}
                                 <button type="submit" style={{ ...styles.btn(), marginTop: 14 }} disabled={loading}>{loading ? 'Adding...' : '+ Add slot'}</button>
                             </form>
                         </div>
@@ -437,7 +428,56 @@ export default function StaffDashboard() {
                     </div>
                 )}
 
-                {/* ── NOTIFICATIONS ── */}
+                {/* DIRECTORY (read-only for staff) */}
+                {view === 'directory' && (
+                    <div>
+                        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 4 }}>Personnel Directory</h1>
+                        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Search for other staff members and student representatives across the university.</p>
+                        <div style={styles.card}>
+                            <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                                <input style={{ ...styles.input, flex: 1, marginBottom: 0 }} placeholder="Search by name, department, specialisation..." value={dirQuery} onChange={e => setDirQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleDirectorySearch()} />
+                                <button style={styles.btn()} onClick={handleDirectorySearch}>Search</button>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                {[['', 'All'], ['lecturer', 'Lecturers'], ['mentor', 'Mentors'], ['administrative', 'Admin Staff'], ['student_representative', 'Student Reps']].map(([val, label]) => (
+                                    <button key={val} onClick={() => { setDirTypeFilter(val); }}
+                                        style={{ background: dirTypeFilter === val ? '#1a2744' : '#f1f5f9', color: dirTypeFilter === val ? '#fff' : '#475569', border: 'none', borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {dirLoading ? (
+                            <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Searching...</div>
+                        ) : dirResults.length === 0 ? (
+                            <div style={{ ...styles.card, textAlign: 'center', padding: 40, color: '#64748b' }}>No results. Try a different search.</div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                                {dirResults.map((item, i) => (
+                                    <div key={i} style={styles.card}>
+                                        <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                                            <Avatar name={`${item.first_name} ${item.last_name}`} />
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: 14, color: '#1a2744' }}>
+                                                    {item.title ? `${item.title} ` : ''}{item.first_name} {item.last_name}
+                                                </div>
+                                                <div style={{ fontSize: 12, color: '#64748b' }}>{item.position || item.rep_role}</div>
+                                                <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.department_name || item.program}</div>
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 12, color: '#475569', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                            {item.official_email && <div>✉️ {item.official_email}</div>}
+                                            {item.phone_extension && <div>📞 {item.phone_extension}</div>}
+                                            {item.office_location && <div>📍 {item.office_location}</div>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* NOTIFICATIONS */}
                 {view === 'notifications' && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 20 }}>Notifications</h1>

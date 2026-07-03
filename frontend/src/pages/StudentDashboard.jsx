@@ -18,16 +18,8 @@ const Badge = ({ label, color = '#1a2744' }) => (
     <span style={{ background: color + '18', color, border: `1px solid ${color}40`, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>{label}</span>
 );
 
-const typeLabel = (t) => ({
-    lecturer: 'Lecturer', mentor: 'Mentor',
-    administrative: 'Admin Staff', student_representative: 'Student Rep'
-}[t] || t);
-
-const typeColor = (t) => ({
-    lecturer: '#1a2744', mentor: '#7c3aed',
-    administrative: '#0369a1', student_representative: '#b45309'
-}[t] || '#64748b');
-
+const typeLabel = (t) => ({ lecturer: 'Lecturer', mentor: 'Mentor', administrative: 'Admin Staff', student_representative: 'Student Rep' }[t] || t);
+const typeColor = (t) => ({ lecturer: '#1a2744', mentor: '#7c3aed', administrative: '#0369a1', student_representative: '#b45309' }[t] || '#64748b');
 const statusColor = (s) => ({ pending: '#f59e0b', confirmed: '#10b981', cancelled: '#ef4444', completed: '#6366f1' }[s] || '#6b7280');
 
 const styles = {
@@ -54,7 +46,7 @@ export default function StudentDashboard() {
     const [selectedStaff, setSelectedStaff] = useState(null);
     const [profileLoading, setProfileLoading] = useState(false);
     const [slots, setSlots] = useState([]);
-    const [bookingForm, setBookingForm] = useState({ slotId: '', appointmentDate: '', startTime: '', endTime: '', purpose: '', additionalNotes: '' });
+    const [bookingForm, setBookingForm] = useState({ slotId: '', appointmentDate: '', startTime: '', endTime: '', purpose: '', additionalNotes: '', meetingLocation: '' });
     const [bookingLoading, setBookingLoading] = useState(false);
     const [bookingSuccess, setBookingSuccess] = useState('');
     const [bookingError, setBookingError] = useState('');
@@ -64,8 +56,8 @@ export default function StudentDashboard() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
 
-    // My profile state
     const [myProfile, setMyProfile] = useState(null);
+    const [profileLoadError, setProfileLoadError] = useState('');
     const [profileForm, setProfileForm] = useState({});
     const [profileMsg, setProfileMsg] = useState('');
     const [profileErr, setProfileErr] = useState('');
@@ -88,7 +80,6 @@ export default function StudentDashboard() {
     }, [searchQuery, staffTypeFilter]);
 
     const openProfile = async (item) => {
-        // student reps don't have staff booking — just show info
         if (item.source_type === 'student_rep') {
             setSelectedStaff({ ...item, isRep: true });
             setSlots([]);
@@ -108,27 +99,36 @@ export default function StudentDashboard() {
     };
 
     const loadMyProfile = async () => {
+        setProfileLoadError('');
         const res = await api.getMe();
         if (res.success) {
-            setMyProfile(res.data.user.profile);
+            const profile = res.data.user.profile;
+            if (!profile) {
+                setProfileLoadError('No profile found for this account. Please contact an administrator.');
+                return;
+            }
+            setMyProfile(profile);
             setProfileForm({
-                firstName: res.data.user.profile?.first_name || '',
-                lastName: res.data.user.profile?.last_name || '',
-                program: res.data.user.profile?.program || '',
-                yearOfStudy: res.data.user.profile?.year_of_study || '',
-                department: res.data.user.profile?.department || '',
-                phoneNumber: res.data.user.profile?.phone_number || '',
-                isStudentRep: res.data.user.profile?.is_student_rep || false,
-                repRole: res.data.user.profile?.rep_role || '',
+                firstName: profile.first_name || '',
+                lastName: profile.last_name || '',
+                program: profile.program || '',
+                yearOfStudy: profile.year_of_study || '',
+                department: profile.department || '',
+                phoneNumber: profile.phone_number || '',
+                isStudentRep: profile.is_student_rep || false,
+                repRole: profile.rep_role || '',
             });
+        } else {
+            setProfileLoadError(res.message || 'Failed to load profile. Please try logging out and back in.');
         }
     };
 
     const saveMyProfile = async () => {
         setProfileSaving(true); setProfileMsg(''); setProfileErr('');
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
         const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1'}/staff/student-profile`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}` },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify(profileForm),
         });
         const data = await res.json();
@@ -150,8 +150,8 @@ export default function StudentDashboard() {
         setBookingLoading(true); setBookingError('');
         const res = await api.bookAppointment({ ...bookingForm, staffId: selectedStaff.staff_id });
         if (res.success) {
-            setBookingSuccess('Appointment request submitted! You will be notified once confirmed.');
-            setBookingForm({ slotId: '', appointmentDate: '', startTime: '', endTime: '', purpose: '', additionalNotes: '' });
+            setBookingSuccess('Appointment request submitted. You will be notified once the staff member responds.');
+            setBookingForm({ slotId: '', appointmentDate: '', startTime: '', endTime: '', purpose: '', additionalNotes: '', meetingLocation: '' });
         } else {
             setBookingError(res.message || 'Booking failed. Please try again.');
         }
@@ -175,9 +175,8 @@ export default function StudentDashboard() {
 
     return (
         <div style={styles.container}>
-            {/* Navbar */}
             <nav style={styles.navbar}>
-                <span style={{ fontWeight: 700, fontSize: 16 }}>📚 SU Directory</span>
+                <span style={{ fontWeight: 700, fontSize: 16 }}>SU Directory</span>
                 <div style={{ display: 'flex', gap: 4 }}>
                     <button style={styles.navBtn(view === 'search')} onClick={() => setView('search')}>Directory</button>
                     <button style={styles.navBtn(view === 'myprofile')} onClick={() => { setView('myprofile'); loadMyProfile(); }}>My Profile</button>
@@ -194,17 +193,14 @@ export default function StudentDashboard() {
 
             <main style={styles.main}>
 
-                {/* ── SEARCH ── */}
+                {/* SEARCH */}
                 {view === 'search' && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 4 }}>Find university personnel</h1>
                         <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Search by name, department, role, or specialisation</p>
-
                         <div style={styles.card}>
                             <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                                <input style={{ ...styles.input, flex: 1 }} placeholder="Search by name, department, specialisation..."
-                                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleSearch(1)} />
+                                <input style={{ ...styles.input, flex: 1 }} placeholder="Search by name, department, specialisation..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch(1)} />
                                 <button style={styles.btn()} onClick={() => handleSearch(1)}>Search</button>
                             </div>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -216,7 +212,6 @@ export default function StudentDashboard() {
                                 ))}
                             </div>
                         </div>
-
                         {searchLoading ? (
                             <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Searching...</div>
                         ) : searchResults.length === 0 ? (
@@ -232,9 +227,7 @@ export default function StudentDashboard() {
                                             <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                                                 <Avatar name={`${item.first_name} ${item.last_name}`} bg={typeColor(item.staff_type)} />
                                                 <div>
-                                                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1a2744' }}>
-                                                        {item.title ? `${item.title} ` : ''}{item.first_name} {item.last_name}
-                                                    </div>
+                                                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1a2744' }}>{item.title ? `${item.title} ` : ''}{item.first_name} {item.last_name}</div>
                                                     <div style={{ fontSize: 12, color: '#64748b' }}>{item.position || item.rep_role}</div>
                                                     <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.department_name || item.program}</div>
                                                 </div>
@@ -242,7 +235,7 @@ export default function StudentDashboard() {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                                     <Badge label={typeLabel(item.staff_type)} color={typeColor(item.staff_type)} />
-                                                    {item.is_mentor === true || item.is_mentor === 1 ? <Badge label="Mentor" color="#7c3aed" /> : null}
+                                                    {(item.is_mentor === true || item.is_mentor === 1) && <Badge label="Mentor" color="#7c3aed" />}
                                                 </div>
                                                 {item.source_type !== 'student_rep' && (
                                                     <span style={{ fontSize: 11, color: item.available_slots_count > 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
@@ -255,9 +248,9 @@ export default function StudentDashboard() {
                                 </div>
                                 {totalPages > 1 && (
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 20 }}>
-                                        <button onClick={() => handleSearch(page - 1)} disabled={page === 1} style={styles.btnOutline}>← Prev</button>
+                                        <button onClick={() => handleSearch(page - 1)} disabled={page === 1} style={styles.btnOutline}>Prev</button>
                                         <span style={{ padding: '9px 14px', fontSize: 13 }}>Page {page} of {totalPages}</span>
-                                        <button onClick={() => handleSearch(page + 1)} disabled={page === totalPages} style={styles.btnOutline}>Next →</button>
+                                        <button onClick={() => handleSearch(page + 1)} disabled={page === totalPages} style={styles.btnOutline}>Next</button>
                                     </div>
                                 )}
                             </>
@@ -265,10 +258,10 @@ export default function StudentDashboard() {
                     </div>
                 )}
 
-                {/* ── PROFILE VIEW (staff or rep) ── */}
+                {/* STAFF / REP PROFILE VIEW */}
                 {view === 'profile' && (
                     <div>
-                        <button onClick={() => setView('search')} style={{ ...styles.btnOutline, marginBottom: 20 }}>← Back to search</button>
+                        <button onClick={() => setView('search')} style={{ ...styles.btnOutline, marginBottom: 20 }}>Back to search</button>
                         {profileLoading ? (
                             <div style={{ textAlign: 'center', padding: 60, color: '#64748b' }}>Loading profile...</div>
                         ) : selectedStaff ? (
@@ -278,9 +271,7 @@ export default function StudentDashboard() {
                                         <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
                                             <Avatar name={`${selectedStaff.first_name} ${selectedStaff.last_name}`} size={64} bg={typeColor(selectedStaff.staff_type)} />
                                             <div>
-                                                <div style={{ fontWeight: 700, fontSize: 18, color: '#1a2744' }}>
-                                                    {selectedStaff.title ? `${selectedStaff.title} ` : ''}{selectedStaff.first_name} {selectedStaff.last_name}
-                                                </div>
+                                                <div style={{ fontWeight: 700, fontSize: 18, color: '#1a2744' }}>{selectedStaff.title ? `${selectedStaff.title} ` : ''}{selectedStaff.first_name} {selectedStaff.last_name}</div>
                                                 <div style={{ fontSize: 13, color: '#64748b' }}>{selectedStaff.position || selectedStaff.rep_role}</div>
                                                 <div style={{ fontSize: 13, color: '#94a3b8' }}>{selectedStaff.department_name || selectedStaff.program}</div>
                                                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
@@ -290,17 +281,14 @@ export default function StudentDashboard() {
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-                                            {selectedStaff.office_location && <div><span style={{ color: '#64748b' }}>📍 </span>{selectedStaff.office_location}</div>}
-                                            {selectedStaff.official_email && <div><span style={{ color: '#64748b' }}>✉️ </span><a href={`mailto:${selectedStaff.official_email}`} style={{ color: '#1a2744' }}>{selectedStaff.official_email}</a></div>}
-                                            {selectedStaff.office_hours && <div><span style={{ color: '#64748b' }}>🕐 </span>{selectedStaff.office_hours}</div>}
-                                            {selectedStaff.year_of_study && <div><span style={{ color: '#64748b' }}>📚 </span>Year {selectedStaff.year_of_study}</div>}
+                                            {selectedStaff.office_location && <div><span style={{ color: '#64748b' }}>Office: </span>{selectedStaff.office_location}</div>}
+                                            {selectedStaff.official_email && <div><span style={{ color: '#64748b' }}>Email: </span><a href={`mailto:${selectedStaff.official_email}`} style={{ color: '#1a2744' }}>{selectedStaff.official_email}</a></div>}
+                                            {selectedStaff.office_hours && <div><span style={{ color: '#64748b' }}>Hours: </span>{selectedStaff.office_hours}</div>}
                                         </div>
                                     </div>
                                     {selectedStaff.areas_of_specialization && (
                                         <div style={styles.card}>
-                                            <div style={{ fontWeight: 600, marginBottom: 8, color: '#1a2744' }}>
-                                                {selectedStaff.isRep ? 'Role & Responsibilities' : 'Areas of Specialisation'}
-                                            </div>
+                                            <div style={{ fontWeight: 600, marginBottom: 8, color: '#1a2744' }}>{selectedStaff.isRep ? 'Role and Responsibilities' : 'Areas of Specialisation'}</div>
                                             <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6 }}>{selectedStaff.areas_of_specialization}</div>
                                         </div>
                                     )}
@@ -312,7 +300,6 @@ export default function StudentDashboard() {
                                     )}
                                 </div>
 
-                                {/* Booking — only for actual staff, not student reps */}
                                 {!selectedStaff.isRep && (
                                     <div style={styles.card}>
                                         <div style={{ fontWeight: 700, fontSize: 16, color: '#1a2744', marginBottom: 16 }}>Book an Appointment</div>
@@ -328,29 +315,30 @@ export default function StudentDashboard() {
                                                     <select style={{ ...styles.input, marginBottom: 12 }} value={bookingForm.slotId}
                                                         onChange={e => {
                                                             const slot = slots.find(s => s.slot_id === parseInt(e.target.value));
-                                                            setBookingForm(p => ({ ...p, slotId: e.target.value, startTime: slot?.start_time || '', endTime: slot?.end_time || '' }));
+                                                            setBookingForm(p => ({
+                                                                ...p,
+                                                                slotId: e.target.value,
+                                                                startTime: slot?.start_time || '',
+                                                                endTime: slot?.end_time || '',
+                                                                meetingLocation: slot?.location || ''
+                                                            }));
                                                         }}>
                                                         <option value="">Choose a slot...</option>
                                                         {slots.map(slot => (
                                                             <option key={slot.slot_id} value={slot.slot_id}>
                                                                 {slot.is_recurring ? DAYS[slot.day_of_week] : new Date(slot.specific_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}
-                                                                {' · '}{slot.start_time?.substring(0, 5)} – {slot.end_time?.substring(0, 5)}
-                                                                {slot.location ? ` · ${slot.location}` : ''}
+                                                                {' '}{slot.start_time?.substring(0, 5)} – {slot.end_time?.substring(0, 5)}
+                                                                {slot.location ? ` (${slot.location})` : ''}
                                                             </option>
                                                         ))}
                                                     </select>
                                                 )}
                                                 <label style={styles.label}>Appointment date *</label>
-                                                <input type="date" style={{ ...styles.input, marginBottom: 12 }}
-                                                    min={new Date().toISOString().split('T')[0]}
-                                                    value={bookingForm.appointmentDate}
-                                                    onChange={e => setBookingForm(p => ({ ...p, appointmentDate: e.target.value }))} />
+                                                <input type="date" style={{ ...styles.input, marginBottom: 12 }} min={new Date().toISOString().split('T')[0]} value={bookingForm.appointmentDate} onChange={e => setBookingForm(p => ({ ...p, appointmentDate: e.target.value }))} />
                                                 <label style={styles.label}>Purpose *</label>
-                                                <input style={{ ...styles.input, marginBottom: 12 }} placeholder="e.g. CAT result query, project guidance..."
-                                                    value={bookingForm.purpose} onChange={e => setBookingForm(p => ({ ...p, purpose: e.target.value }))} />
+                                                <input style={{ ...styles.input, marginBottom: 12 }} placeholder="e.g. CAT result query, project guidance..." value={bookingForm.purpose} onChange={e => setBookingForm(p => ({ ...p, purpose: e.target.value }))} />
                                                 <label style={styles.label}>Additional notes (optional)</label>
-                                                <textarea style={{ ...styles.textarea, marginBottom: 16 }} value={bookingForm.additionalNotes}
-                                                    onChange={e => setBookingForm(p => ({ ...p, additionalNotes: e.target.value }))} />
+                                                <textarea style={{ ...styles.textarea, marginBottom: 16 }} value={bookingForm.additionalNotes} onChange={e => setBookingForm(p => ({ ...p, additionalNotes: e.target.value }))} />
                                                 <button type="submit" style={{ ...styles.btn(), width: '100%' }} disabled={bookingLoading}>
                                                     {bookingLoading ? 'Submitting...' : 'Submit Booking Request'}
                                                 </button>
@@ -364,91 +352,65 @@ export default function StudentDashboard() {
                     </div>
                 )}
 
-                {/* ── MY PROFILE ── */}
+                {/* MY PROFILE */}
                 {view === 'myprofile' && (
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>My Profile</h1>
-                            <button style={editMode ? styles.btnOutline : styles.btn()} onClick={() => { setEditMode(!editMode); setProfileMsg(''); setProfileErr(''); }}>
-                                {editMode ? 'Cancel' : '✏️ Edit profile'}
-                            </button>
+                            {myProfile && !profileLoadError && (
+                                <button style={editMode ? styles.btnOutline : styles.btn()} onClick={() => { setEditMode(!editMode); setProfileMsg(''); setProfileErr(''); }}>
+                                    {editMode ? 'Cancel' : 'Edit profile'}
+                                </button>
+                            )}
                         </div>
-
                         {profileMsg && <div style={styles.alert('success')}>{profileMsg}</div>}
                         {profileErr && <div style={styles.alert('error')}>{profileErr}</div>}
-
-                        {!myProfile ? (
+                        {profileLoadError ? (
+                            <div style={styles.alert('error')}>{profileLoadError}</div>
+                        ) : !myProfile ? (
                             <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Loading...</div>
                         ) : !editMode ? (
-                            /* VIEW MODE */
                             <div style={styles.card}>
                                 <div style={{ display: 'flex', gap: 20, marginBottom: 20, alignItems: 'flex-start' }}>
                                     <Avatar name={`${myProfile.first_name} ${myProfile.last_name}`} size={72} />
                                     <div>
                                         <div style={{ fontWeight: 700, fontSize: 20, color: '#1a2744' }}>{myProfile.first_name} {myProfile.last_name}</div>
-                                        <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{myProfile.program} {myProfile.year_of_study ? `· Year ${myProfile.year_of_study}` : ''}</div>
+                                        <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{myProfile.program}{myProfile.year_of_study ? ` · Year ${myProfile.year_of_study}` : ''}</div>
                                         <div style={{ fontSize: 13, color: '#94a3b8' }}>{myProfile.department}</div>
-                                        {myProfile.is_student_rep ? (
-                                            <div style={{ marginTop: 8 }}>
-                                                <Badge label={`Student Rep · ${myProfile.rep_role || 'Representative'}`} color="#b45309" />
-                                            </div>
-                                        ) : null}
+                                        {myProfile.is_student_rep && <div style={{ marginTop: 8 }}><Badge label={`Student Rep · ${myProfile.rep_role || 'Representative'}`} color="#b45309" /></div>}
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
                                     <div><span style={{ color: '#64748b', fontWeight: 600, width: 120, display: 'inline-block' }}>Reg Number</span>{myProfile.student_reg_no}</div>
                                     <div><span style={{ color: '#64748b', fontWeight: 600, width: 120, display: 'inline-block' }}>Email</span>{user?.email}</div>
                                     {myProfile.phone_number && <div><span style={{ color: '#64748b', fontWeight: 600, width: 120, display: 'inline-block' }}>Phone</span>{myProfile.phone_number}</div>}
                                 </div>
                             </div>
                         ) : (
-                            /* EDIT MODE */
                             <div style={styles.card}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                    <div>
-                                        <label style={styles.label}>First name</label>
-                                        <input style={{ ...styles.input, marginBottom: 12 }} value={profileForm.firstName || ''} onChange={e => setProfileForm(p => ({ ...p, firstName: e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label style={styles.label}>Last name</label>
-                                        <input style={{ ...styles.input, marginBottom: 12 }} value={profileForm.lastName || ''} onChange={e => setProfileForm(p => ({ ...p, lastName: e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label style={styles.label}>Program</label>
-                                        <input style={{ ...styles.input, marginBottom: 12 }} placeholder="e.g. BSc Informatics" value={profileForm.program || ''} onChange={e => setProfileForm(p => ({ ...p, program: e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label style={styles.label}>Year of study</label>
-                                        <input type="number" min={1} max={6} style={{ ...styles.input, marginBottom: 12 }} value={profileForm.yearOfStudy || ''} onChange={e => setProfileForm(p => ({ ...p, yearOfStudy: parseInt(e.target.value) }))} />
-                                    </div>
-                                    <div>
-                                        <label style={styles.label}>Department</label>
-                                        <input style={{ ...styles.input, marginBottom: 12 }} placeholder="e.g. Informatics" value={profileForm.department || ''} onChange={e => setProfileForm(p => ({ ...p, department: e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label style={styles.label}>Phone number (optional)</label>
-                                        <input style={{ ...styles.input, marginBottom: 12 }} placeholder="+254..." value={profileForm.phoneNumber || ''} onChange={e => setProfileForm(p => ({ ...p, phoneNumber: e.target.value }))} />
-                                    </div>
+                                    <div><label style={styles.label}>First name</label><input style={{ ...styles.input, marginBottom: 12 }} value={profileForm.firstName || ''} onChange={e => setProfileForm(p => ({ ...p, firstName: e.target.value }))} /></div>
+                                    <div><label style={styles.label}>Last name</label><input style={{ ...styles.input, marginBottom: 12 }} value={profileForm.lastName || ''} onChange={e => setProfileForm(p => ({ ...p, lastName: e.target.value }))} /></div>
+                                    <div><label style={styles.label}>Program</label><input style={{ ...styles.input, marginBottom: 12 }} placeholder="e.g. BSc Informatics" value={profileForm.program || ''} onChange={e => setProfileForm(p => ({ ...p, program: e.target.value }))} /></div>
+                                    <div><label style={styles.label}>Year of study</label><input type="number" min={1} max={6} style={{ ...styles.input, marginBottom: 12 }} value={profileForm.yearOfStudy || ''} onChange={e => setProfileForm(p => ({ ...p, yearOfStudy: parseInt(e.target.value) }))} /></div>
+                                    <div><label style={styles.label}>Department</label><input style={{ ...styles.input, marginBottom: 12 }} placeholder="e.g. Informatics" value={profileForm.department || ''} onChange={e => setProfileForm(p => ({ ...p, department: e.target.value }))} /></div>
+                                    <div><label style={styles.label}>Phone number (optional)</label><input style={{ ...styles.input, marginBottom: 12 }} placeholder="+254..." value={profileForm.phoneNumber || ''} onChange={e => setProfileForm(p => ({ ...p, phoneNumber: e.target.value }))} /></div>
                                 </div>
-
-                                {/* Student rep toggle */}
                                 <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, marginBottom: 16, background: '#f8fafc' }}>
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: profileForm.isStudentRep ? 12 : 0 }}>
                                         <input type="checkbox" checked={!!profileForm.isStudentRep} onChange={e => setProfileForm(p => ({ ...p, isStudentRep: e.target.checked, repRole: e.target.checked ? p.repRole : '' }))} />
                                         <div>
                                             <div style={{ fontWeight: 600, fontSize: 13, color: '#1a2744' }}>I am a student representative</div>
-                                            <div style={{ fontSize: 11, color: '#64748b' }}>Check this if you hold a rep role — class rep, club chair, student council, etc.</div>
+                                            <div style={{ fontSize: 11, color: '#64748b' }}>Class rep, club chair, student council, etc.</div>
                                         </div>
                                     </label>
                                     {profileForm.isStudentRep && (
                                         <div>
                                             <label style={styles.label}>Your rep role</label>
-                                            <input style={styles.input} placeholder="e.g. ICS Class Rep Year 3, Basketball Club Chair, Student Council Secretary"
-                                                value={profileForm.repRole || ''} onChange={e => setProfileForm(p => ({ ...p, repRole: e.target.value }))} />
+                                            <input style={styles.input} placeholder="e.g. ICS Class Rep Year 3, Basketball Club Chair" value={profileForm.repRole || ''} onChange={e => setProfileForm(p => ({ ...p, repRole: e.target.value }))} />
                                         </div>
                                     )}
                                 </div>
-
                                 <button style={styles.btn()} onClick={saveMyProfile} disabled={profileSaving}>
                                     {profileSaving ? 'Saving...' : 'Save changes'}
                                 </button>
@@ -457,7 +419,7 @@ export default function StudentDashboard() {
                     </div>
                 )}
 
-                {/* ── APPOINTMENTS ── */}
+                {/* MY APPOINTMENTS */}
                 {view === 'appointments' && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 20 }}>My Appointments</h1>
@@ -474,16 +436,22 @@ export default function StudentDashboard() {
                                         </div>
                                         <div style={{ fontSize: 13, color: '#64748b', marginBottom: 2 }}>{appt.department_name}</div>
                                         <div style={{ fontSize: 13, color: '#475569', marginBottom: 4 }}>
-                                            📅 {new Date(appt.appointment_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                                            {' · '}{appt.start_time?.substring(0, 5)} – {appt.end_time?.substring(0, 5)}
+                                            {new Date(appt.appointment_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                            {' '}{appt.start_time?.substring(0, 5)} – {appt.end_time?.substring(0, 5)}
                                         </div>
-                                        <div style={{ fontSize: 13, color: '#475569' }}>📝 {appt.purpose}</div>
+                                        <div style={{ fontSize: 13, color: '#475569' }}>Purpose: {appt.purpose}</div>
+                                        {appt.meeting_link && appt.status === 'confirmed' && (
+                                            <div style={{ fontSize: 13, marginTop: 6 }}>
+                                                <a href={appt.meeting_link} target="_blank" rel="noopener noreferrer" style={{ color: '#1a2744', fontWeight: 600, textDecoration: 'underline' }}>
+                                                    Join Google Meet
+                                                </a>
+                                            </div>
+                                        )}
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                                         <Badge label={appt.status.charAt(0).toUpperCase() + appt.status.slice(1)} color={statusColor(appt.status)} />
                                         {['pending', 'confirmed'].includes(appt.status) && (
-                                            <button onClick={() => handleCancel(appt.appointment_id)}
-                                                style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+                                            <button onClick={() => handleCancel(appt.appointment_id)} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
                                                 Cancel
                                             </button>
                                         )}
@@ -494,14 +462,12 @@ export default function StudentDashboard() {
                     </div>
                 )}
 
-                {/* ── NOTIFICATIONS ── */}
+                {/* NOTIFICATIONS */}
                 {view === 'notifications' && (
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>Notifications</h1>
-                            {unreadCount > 0 && (
-                                <button onClick={async () => { await api.markAllNotificationsRead(); loadNotifications(); }} style={styles.btnOutline}>Mark all as read</button>
-                            )}
+                            {unreadCount > 0 && <button onClick={async () => { await api.markAllNotificationsRead(); loadNotifications(); }} style={styles.btnOutline}>Mark all as read</button>}
                         </div>
                         {notifications.length === 0 ? (
                             <div style={{ ...styles.card, textAlign: 'center', padding: 40, color: '#64748b' }}>No notifications yet.</div>

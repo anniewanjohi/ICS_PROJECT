@@ -6,15 +6,6 @@ import { useAuth } from '../context/AuthContext';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
 const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token');
 
-// deleteUser not in api.js yet so inline it here
-const deleteUser = async (userId) => {
-    const res = await fetch(`${API_URL}/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${getToken()}` }
-    });
-    return res.json();
-};
-
 export default function AdminDashboard() {
     const { user, logout } = useAuth();
     const [view, setView] = useState('stats');
@@ -30,11 +21,17 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
     const [error, setError] = useState('');
-
     const [newUserForm, setNewUserForm] = useState({ email: '', password: '', role: 'staff' });
     const [deptForm, setDeptForm] = useState({ departmentName: '', departmentCode: '', faculty: '', officeLocation: '', description: '' });
     const [showNewUser, setShowNewUser] = useState(false);
     const [showNewDept, setShowNewDept] = useState(false);
+
+    // Admin profile state
+    const [myAdminProfile, setMyAdminProfile] = useState(null);
+    const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [pwMsg, setPwMsg] = useState('');
+    const [pwErr, setPwErr] = useState('');
+    const [pwSaving, setPwSaving] = useState(false);
 
     useEffect(() => { loadStats(); }, []);
 
@@ -46,12 +43,7 @@ export default function AdminDashboard() {
     const loadUsers = async (p = 1) => {
         setLoading(true);
         const res = await api.getAdminUsers({ role: userRoleFilter, search: userSearch, page: p, limit: 20 });
-        if (res.success) {
-            setUsers(res.data.users);
-            setUsersTotal(res.data.total);
-            setUsersTotalPages(res.data.totalPages);
-            setUsersPage(p);
-        }
+        if (res.success) { setUsers(res.data.users); setUsersTotal(res.data.total); setUsersTotalPages(res.data.totalPages); setUsersPage(p); }
         setLoading(false);
     };
 
@@ -65,11 +57,35 @@ export default function AdminDashboard() {
         if (res.success) setLogs(res.data.logs);
     };
 
+    const loadMyAdminProfile = async () => {
+        const res = await api.getMyAdminProfile();
+        if (res.success) setMyAdminProfile(res.data.profile);
+    };
+
+    const handlePasswordChange = async (e) => {
+        e.preventDefault();
+        setPwMsg(''); setPwErr('');
+        if (pwForm.newPassword !== pwForm.confirmPassword) {
+            setPwErr('New password and confirmation do not match.');
+            return;
+        }
+        setPwSaving(true);
+        const res = await api.updateMyAdminPassword(pwForm.currentPassword, pwForm.newPassword);
+        if (res.success) {
+            setPwMsg('Password updated successfully.');
+            setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        } else {
+            setPwErr(res.errors ? res.errors.join(' ') : (res.message || 'Failed to update password.'));
+        }
+        setPwSaving(false);
+    };
+
     const handleViewChange = (v) => {
         setView(v); setMsg(''); setError('');
         if (v === 'users') loadUsers(1);
         if (v === 'departments') loadDepartments();
         if (v === 'logs') loadLogs();
+        if (v === 'myprofile') loadMyAdminProfile();
     };
 
     const handleToggleStatus = async (userId, isActive) => {
@@ -80,37 +96,24 @@ export default function AdminDashboard() {
 
     const handleDeleteUser = async (userId, email) => {
         if (!window.confirm(`Permanently delete ${email}? This cannot be undone.`)) return;
-        const res = await deleteUser(userId);
-        if (res.success) {
-            setMsg(`User ${email} deleted.`);
-            loadUsers(usersPage);
-            loadStats();
-        } else {
-            setError(res.message || 'Failed to delete user.');
-        }
+        const res = await api.deleteUser(userId);
+        if (res.success) { setMsg(`User ${email} deleted.`); loadUsers(usersPage); loadStats(); }
+        else setError(res.message || 'Failed to delete user.');
     };
 
     const handleCreateUser = async (e) => {
         e.preventDefault(); setLoading(true); setMsg(''); setError('');
         const res = await api.createAdminUser(newUserForm);
-        if (res.success) {
-            setMsg('User created successfully.');
-            setShowNewUser(false);
-            setNewUserForm({ email: '', password: '', role: 'staff' });
-            loadUsers(1);
-        } else setError(res.message || 'Failed to create user.');
+        if (res.success) { setMsg('User created successfully.'); setShowNewUser(false); setNewUserForm({ email: '', password: '', role: 'staff' }); loadUsers(1); }
+        else setError(res.message || 'Failed to create user.');
         setLoading(false);
     };
 
     const handleCreateDept = async (e) => {
         e.preventDefault(); setLoading(true); setMsg(''); setError('');
         const res = await api.createDepartment(deptForm);
-        if (res.success) {
-            setMsg('Department created.');
-            setShowNewDept(false);
-            setDeptForm({ departmentName: '', departmentCode: '', faculty: '', officeLocation: '', description: '' });
-            loadDepartments();
-        } else setError(res.message || 'Failed to create department.');
+        if (res.success) { setMsg('Department created.'); setShowNewDept(false); setDeptForm({ departmentName: '', departmentCode: '', faculty: '', officeLocation: '', description: '' }); loadDepartments(); }
+        else setError(res.message || 'Failed to create department.');
         setLoading(false);
     };
 
@@ -136,12 +139,13 @@ export default function AdminDashboard() {
     return (
         <div style={styles.container}>
             <nav style={styles.navbar}>
-                <span style={{ fontWeight: 700, fontSize: 16 }}>📚 SU Directory — Admin</span>
+                <span style={{ fontWeight: 700, fontSize: 16 }}>SU Directory — Admin</span>
                 <div style={{ display: 'flex', gap: 4 }}>
                     <button style={styles.navBtn(view === 'stats')} onClick={() => handleViewChange('stats')}>Overview</button>
                     <button style={styles.navBtn(view === 'users')} onClick={() => handleViewChange('users')}>Users</button>
                     <button style={styles.navBtn(view === 'departments')} onClick={() => handleViewChange('departments')}>Departments</button>
                     <button style={styles.navBtn(view === 'logs')} onClick={() => handleViewChange('logs')}>Audit Logs</button>
+                    <button style={styles.navBtn(view === 'myprofile')} onClick={() => handleViewChange('myprofile')}>My Profile</button>
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     <span style={{ fontSize: 13, opacity: 0.8 }}>{user?.email}</span>
@@ -185,20 +189,13 @@ export default function AdminDashboard() {
                             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>User Accounts</h1>
                             <button style={styles.btn()} onClick={() => setShowNewUser(!showNewUser)}>+ Create user</button>
                         </div>
-
                         {showNewUser && (
                             <div style={styles.card}>
                                 <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2744', marginBottom: 14 }}>Create new user account</div>
                                 <form onSubmit={handleCreateUser}>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                                        <div>
-                                            <label style={styles.label}>Email *</label>
-                                            <input style={styles.input} type="email" placeholder="user@strathmore.edu" value={newUserForm.email} onChange={e => setNewUserForm(p => ({ ...p, email: e.target.value }))} />
-                                        </div>
-                                        <div>
-                                            <label style={styles.label}>Password *</label>
-                                            <input style={styles.input} type="password" placeholder="Min 8 chars" value={newUserForm.password} onChange={e => setNewUserForm(p => ({ ...p, password: e.target.value }))} />
-                                        </div>
+                                        <div><label style={styles.label}>Email *</label><input style={styles.input} type="email" placeholder="user@strathmore.edu" value={newUserForm.email} onChange={e => setNewUserForm(p => ({ ...p, email: e.target.value }))} /></div>
+                                        <div><label style={styles.label}>Password *</label><input style={styles.input} type="password" value={newUserForm.password} onChange={e => setNewUserForm(p => ({ ...p, password: e.target.value }))} /></div>
                                         <div>
                                             <label style={styles.label}>Role *</label>
                                             <select style={styles.input} value={newUserForm.role} onChange={e => setNewUserForm(p => ({ ...p, role: e.target.value }))}>
@@ -215,14 +212,10 @@ export default function AdminDashboard() {
                                 </form>
                             </div>
                         )}
-
                         <div style={styles.card}>
                             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                                <input style={{ ...styles.input, flex: 1, marginBottom: 0 }} placeholder="Search by email..." value={userSearch}
-                                    onChange={e => setUserSearch(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && loadUsers(1)} />
-                                <select style={{ ...styles.input, width: 140, marginBottom: 0 }} value={userRoleFilter}
-                                    onChange={e => { setUserRoleFilter(e.target.value); }}>
+                                <input style={{ ...styles.input, flex: 1, marginBottom: 0 }} placeholder="Search by email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && loadUsers(1)} />
+                                <select style={{ ...styles.input, width: 140, marginBottom: 0 }} value={userRoleFilter} onChange={e => setUserRoleFilter(e.target.value)}>
                                     <option value="">All roles</option>
                                     <option value="student">Student</option>
                                     <option value="staff">Staff</option>
@@ -230,7 +223,6 @@ export default function AdminDashboard() {
                                 </select>
                                 <button style={styles.btn()} onClick={() => loadUsers(1)}>Search</button>
                             </div>
-
                             {loading ? (
                                 <div style={{ textAlign: 'center', padding: 30, color: '#64748b' }}>Loading...</div>
                             ) : (
@@ -260,39 +252,30 @@ export default function AdminDashboard() {
                                                         {u.staff_type && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{u.staff_type}</div>}
                                                     </td>
                                                     <td style={styles.td}>{u.student_reg_no || u.staff_number || '—'}</td>
-                                                    <td style={styles.td}>
-                                                        <span style={styles.badge(u.is_active ? '#10b981' : '#ef4444')}>{u.is_active ? 'Active' : 'Suspended'}</span>
-                                                    </td>
+                                                    <td style={styles.td}><span style={styles.badge(u.is_active ? '#10b981' : '#ef4444')}>{u.is_active ? 'Active' : 'Suspended'}</span></td>
                                                     <td style={styles.td}>{u.last_login ? new Date(u.last_login).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'}</td>
                                                     <td style={styles.td}>
                                                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                                                             <button style={styles.btnSm(u.is_active ? '#f59e0b' : '#10b981')} onClick={() => handleToggleStatus(u.user_id, u.is_active)}>
                                                                 {u.is_active ? 'Suspend' : 'Activate'}
                                                             </button>
-                                                            <button
-                                                                style={styles.btnSm('#ef4444')}
-                                                                onClick={() => handleDeleteUser(u.user_id, u.email)}
-                                                                disabled={u.user_id === user?.id}
-                                                            >
+                                                            <button style={styles.btnSm('#ef4444')} onClick={() => handleDeleteUser(u.user_id, u.email)} disabled={u.user_id === user?.id}>
                                                                 Delete
                                                             </button>
                                                         </div>
                                                     </td>
                                                 </tr>
                                             ))}
-                                            {users.length === 0 && (
-                                                <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94a3b8' }}>No users found.</td></tr>
-                                            )}
+                                            {users.length === 0 && <tr><td colSpan={6} style={{ ...styles.td, textAlign: 'center', color: '#94a3b8' }}>No users found.</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>
                             )}
-
                             {usersTotalPages > 1 && (
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
-                                    <button onClick={() => loadUsers(usersPage - 1)} disabled={usersPage === 1} style={styles.btnOutline}>← Prev</button>
+                                    <button onClick={() => loadUsers(usersPage - 1)} disabled={usersPage === 1} style={styles.btnOutline}>Prev</button>
                                     <span style={{ padding: '9px 14px', fontSize: 13 }}>Page {usersPage} of {usersTotalPages} ({usersTotal} users)</span>
-                                    <button onClick={() => loadUsers(usersPage + 1)} disabled={usersPage === usersTotalPages} style={styles.btnOutline}>Next →</button>
+                                    <button onClick={() => loadUsers(usersPage + 1)} disabled={usersPage === usersTotalPages} style={styles.btnOutline}>Next</button>
                                 </div>
                             )}
                         </div>
@@ -368,6 +351,47 @@ export default function AdminDashboard() {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MY PROFILE */}
+                {view === 'myprofile' && (
+                    <div>
+                        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 20 }}>My Profile</h1>
+                        {myAdminProfile && (
+                            <div style={styles.card}>
+                                <div style={{ fontSize: 13, color: '#475569', marginBottom: 8 }}>
+                                    <strong>Email:</strong> {myAdminProfile.email}
+                                </div>
+                                <div style={{ fontSize: 13, color: '#475569', marginBottom: 8 }}>
+                                    <strong>Role:</strong> Administrator
+                                </div>
+                                <div style={{ fontSize: 13, color: '#475569', marginBottom: 8 }}>
+                                    <strong>Account created:</strong> {new Date(myAdminProfile.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                </div>
+                                {myAdminProfile.last_login && (
+                                    <div style={{ fontSize: 13, color: '#475569' }}>
+                                        <strong>Last login:</strong> {new Date(myAdminProfile.last_login).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <div style={styles.card}>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: '#1a2744', marginBottom: 14 }}>Change password</div>
+                            {pwMsg && <div style={styles.alert('success')}>{pwMsg}</div>}
+                            {pwErr && <div style={styles.alert('error')}>{pwErr}</div>}
+                            <form onSubmit={handlePasswordChange}>
+                                <label style={styles.label}>Current password</label>
+                                <input type="password" style={styles.input} value={pwForm.currentPassword} onChange={e => setPwForm(p => ({ ...p, currentPassword: e.target.value }))} />
+                                <label style={styles.label}>New password</label>
+                                <input type="password" style={styles.input} value={pwForm.newPassword} onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))} />
+                                <label style={styles.label}>Confirm new password</label>
+                                <input type="password" style={styles.input} value={pwForm.confirmPassword} onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))} />
+                                <button type="submit" style={styles.btn()} disabled={pwSaving}>
+                                    {pwSaving ? 'Saving...' : 'Update password'}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 )}
