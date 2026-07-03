@@ -6,8 +6,69 @@ const PasswordUtils = require('../authentication/passwordUtils');
 const { logAction } = require('../../utils/logger');
 
 const router = express.Router();
+
 router.use(AuthMiddleware.protect);
 router.use(AuthMiddleware.restrictTo('admin'));
+
+// GET /api/v1/admin/my-profile
+router.get('/my-profile', async (req, res) => {
+    try {
+        const pool = getPool();
+        const result = await pool.request()
+            .input('user_id', sql.Int, req.user.userId)
+            .query('SELECT user_id, email, role, created_at, last_login FROM dbo.users WHERE user_id = @user_id');
+
+        if (!result.recordset[0]) {
+            return res.status(404).json({ success: false, message: 'Admin account not found' });
+        }
+        return res.status(200).json({ success: true, data: { profile: result.recordset[0] } });
+    } catch (error) {
+        console.error('Get admin profile error:', error);
+        return res.status(500).json({ success: false, message: 'Error fetching admin profile' });
+    }
+});
+
+// PATCH /api/v1/admin/my-profile
+router.patch('/my-profile', async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ success: false, message: 'Current and new password are required' });
+        }
+
+        const pool = getPool();
+        const userResult = await pool.request()
+            .input('user_id', sql.Int, req.user.userId)
+            .query('SELECT password_hash FROM dbo.users WHERE user_id = @user_id');
+
+        if (!userResult.recordset[0]) {
+            return res.status(404).json({ success: false, message: 'Admin account not found' });
+        }
+
+        const isValid = await PasswordUtils.comparePassword(currentPassword, userResult.recordset[0].password_hash);
+        if (!isValid) {
+            return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+        }
+
+        const passwordCheck = PasswordUtils.validatePasswordStrength(newPassword);
+        if (!passwordCheck.isValid) {
+            return res.status(400).json({ success: false, message: 'New password does not meet requirements', errors: passwordCheck.errors });
+        }
+
+        const newHash = await PasswordUtils.hashPassword(newPassword);
+        await pool.request()
+            .input('user_id', sql.Int, req.user.userId)
+            .input('password_hash', sql.VarChar, newHash)
+            .query('UPDATE dbo.users SET password_hash = @password_hash, updated_at = GETDATE() WHERE user_id = @user_id');
+
+        await logAction(req.user.userId, 'ADMIN_PASSWORD_CHANGED', 'users', req.user.userId, req);
+        return res.status(200).json({ success: true, message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Update admin profile error:', error);
+        return res.status(500).json({ success: false, message: 'Error updating admin profile' });
+    }
+});
 
 // GET /api/v1/admin/stats
 router.get('/stats', async (req, res) => {
@@ -60,7 +121,6 @@ router.get('/users', async (req, res) => {
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
         `);
 
-        // Count total
         const countRequest = pool.request();
         if (role) countRequest.input('role', sql.VarChar, role);
         if (search) countRequest.input('search', sql.VarChar, `%${search}%`);
@@ -118,19 +178,16 @@ router.patch('/users/:id/role', async (req, res) => {
     }
 });
 
-// DELETE /api/v1/admin/users/:id  ← NEW
+// DELETE /api/v1/admin/users/:id
 router.delete('/users/:id', async (req, res) => {
     try {
         const userId = parseInt(req.params.id);
 
-        // Prevent admin from deleting themselves
         if (userId === req.user.userId) {
             return res.status(400).json({ success: false, message: 'You cannot delete your own account' });
         }
 
         const pool = getPool();
-
-        // Check user exists
         const check = await pool.request()
             .input('user_id', sql.Int, userId)
             .query('SELECT user_id, email, role FROM dbo.users WHERE user_id = @user_id');
@@ -139,7 +196,6 @@ router.delete('/users/:id', async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // ON DELETE CASCADE handles students/staff_profiles/notifications automatically
         await pool.request()
             .input('user_id', sql.Int, userId)
             .query('DELETE FROM dbo.users WHERE user_id = @user_id');

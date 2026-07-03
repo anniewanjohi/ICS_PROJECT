@@ -6,7 +6,6 @@ const { logAction } = require('../../utils/logger');
 
 class AppointmentController {
 
-    // GET /api/v1/appointments/slots/:staffId
     static async getSlots(req, res) {
         try {
             const { staffId } = req.params;
@@ -19,7 +18,6 @@ class AppointmentController {
         }
     }
 
-    // POST /api/v1/appointments
     static async book(req, res) {
         try {
             const { staffId, slotId, appointmentDate, startTime, endTime, purpose, additionalNotes, meetingLocation } = req.body;
@@ -28,7 +26,6 @@ class AppointmentController {
                 return res.status(400).json({ success: false, message: 'staffId, appointmentDate, startTime, endTime, and purpose are required' });
             }
 
-            // Get student record from user
             const pool = getPool();
             const studentResult = await pool.request()
                 .input('user_id', sql.Int, req.user.userId)
@@ -40,23 +37,28 @@ class AppointmentController {
 
             const studentId = studentResult.recordset[0].student_id;
 
-            // Check slot not already taken
             const taken = await AppointmentModel.isSlotTaken(parseInt(staffId), appointmentDate, startTime);
             if (taken) {
                 return res.status(409).json({ success: false, message: 'This time slot has already been booked. Please select another.' });
             }
 
+            // Extract Google Meet link if the slot's location indicates it is online.
+            // Slots created as online have their location formatted as "Online — <link>"
+            let extractedMeetingLink = null;
+            if (meetingLocation && meetingLocation.startsWith('Online — ')) {
+                extractedMeetingLink = meetingLocation.replace('Online — ', '').trim();
+            }
+
             const appointment = await AppointmentModel.create(studentId, parseInt(staffId), slotId || null, {
-                appointmentDate, startTime, endTime, purpose, additionalNotes, meetingLocation
+                appointmentDate, startTime, endTime, purpose, additionalNotes,
+                meetingLocation, meetingLink: extractedMeetingLink
             });
 
-            // Get staff user_id for notification
             const staffResult = await pool.request()
                 .input('staff_id', sql.Int, staffId)
                 .query('SELECT user_id, first_name, last_name FROM staff_profiles WHERE staff_id = @staff_id');
             const staff = staffResult.recordset[0];
 
-            // Notify staff
             await NotificationModel.create({
                 userId: staff.user_id,
                 appointmentId: appointment.appointment_id,
@@ -65,7 +67,6 @@ class AppointmentController {
                 type: 'appointment_created'
             });
 
-            // Notify student (confirmation of submission)
             await NotificationModel.create({
                 userId: req.user.userId,
                 appointmentId: appointment.appointment_id,
@@ -84,7 +85,6 @@ class AppointmentController {
         }
     }
 
-    // GET /api/v1/appointments/my  — student sees their own appointments
     static async getMyAppointments(req, res) {
         try {
             const { status } = req.query;
@@ -128,7 +128,6 @@ class AppointmentController {
         }
     }
 
-    // PATCH /api/v1/appointments/:id/respond  — staff confirms or declines
     static async respond(req, res) {
         try {
             const { id } = req.params;
@@ -143,7 +142,6 @@ class AppointmentController {
                 return res.status(404).json({ success: false, message: 'Appointment not found' });
             }
 
-            // Make sure this staff member owns this appointment
             const pool = getPool();
             const staffResult = await pool.request()
                 .input('user_id', sql.Int, req.user.userId)
@@ -155,7 +153,6 @@ class AppointmentController {
 
             const updated = await AppointmentModel.updateStatus(parseInt(id), status === 'declined' ? 'cancelled' : status, { cancellationReason });
 
-            // Notify student
             const notifTitle = status === 'confirmed' ? 'Appointment Confirmed' : 'Appointment Declined';
             const notifMsg = status === 'confirmed'
                 ? `Your appointment on ${appointment.appointment_date} at ${appointment.start_time} has been confirmed.`
@@ -179,7 +176,6 @@ class AppointmentController {
         }
     }
 
-    // PATCH /api/v1/appointments/:id/cancel  — student cancels their own
     static async cancel(req, res) {
         try {
             const { id } = req.params;
@@ -190,7 +186,6 @@ class AppointmentController {
                 return res.status(404).json({ success: false, message: 'Appointment not found' });
             }
 
-            // Confirm this student owns it
             const pool = getPool();
             const studentResult = await pool.request()
                 .input('user_id', sql.Int, req.user.userId)
@@ -204,7 +199,6 @@ class AppointmentController {
                 return res.status(400).json({ success: false, message: 'This appointment cannot be cancelled' });
             }
 
-            // Enforce 2-hour rule
             const canCancel = await AppointmentModel.canStudentCancel(parseInt(id));
             if (!canCancel) {
                 return res.status(400).json({ success: false, message: 'Appointments can only be cancelled more than 2 hours before the scheduled time' });
@@ -212,7 +206,6 @@ class AppointmentController {
 
             await AppointmentModel.updateStatus(parseInt(id), 'cancelled', { cancellationReason });
 
-            // Notify staff
             await NotificationModel.create({
                 userId: appointment.staff_user_id,
                 appointmentId: parseInt(id),

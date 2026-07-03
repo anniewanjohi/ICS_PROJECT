@@ -1,24 +1,26 @@
 // modules/appointments/appointmentModel.js
 const { getPool, sql } = require('../../config/database');
 
+function formatTimeField(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    const hours = String(value.getUTCHours()).padStart(2, '0');
+    const minutes = String(value.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(value.getUTCSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+}
+
 const AppointmentModel = {
 
-    // Get availability slots for a staff member
     getAvailableSlots: async (staffId, weeksAhead = 2) => {
         const pool = getPool();
         const result = await pool.request()
             .input('staff_id', sql.Int, staffId)
             .query(`
                 SELECT 
-                    av.slot_id,
-                    av.day_of_week,
-                    av.start_time,
-                    av.end_time,
-                    av.slot_duration,
-                    av.location,
-                    av.is_recurring,
-                    av.specific_date,
-                    av.is_available
+                    av.slot_id, av.day_of_week, av.start_time, av.end_time,
+                    av.slot_duration, av.location, av.is_recurring,
+                    av.specific_date, av.is_available
                 FROM availability_slots av
                 WHERE av.staff_id = @staff_id
                   AND av.is_available = 1
@@ -28,10 +30,13 @@ const AppointmentModel = {
                   )
                 ORDER BY av.day_of_week ASC, av.start_time ASC
             `);
-        return result.recordset;
+        return result.recordset.map(slot => ({
+            ...slot,
+            start_time: formatTimeField(slot.start_time),
+            end_time: formatTimeField(slot.end_time),
+        }));
     },
 
-    // Get booked appointment dates/times for a staff member (to show as unavailable)
     getBookedSlots: async (staffId) => {
         const pool = getPool();
         const result = await pool.request()
@@ -43,10 +48,14 @@ const AppointmentModel = {
                   AND status IN ('pending', 'confirmed')
                   AND appointment_date >= CAST(GETDATE() AS DATE)
             `);
-        return result.recordset;
+        return result.recordset.map(row => ({
+            ...row,
+            start_time: formatTimeField(row.start_time),
+            end_time: formatTimeField(row.end_time),
+        }));
     },
 
-    // Book an appointment
+    // Book an appointment, now supports meetingLink
     create: async (studentId, staffId, slotId, data) => {
         const pool = getPool();
         const result = await pool.request()
@@ -59,17 +68,20 @@ const AppointmentModel = {
             .input('purpose', sql.Text, data.purpose)
             .input('additional_notes', sql.Text, data.additionalNotes || null)
             .input('meeting_location', sql.VarChar, data.meetingLocation || null)
+            .input('meeting_link', sql.VarChar, data.meetingLink || null)
             .query(`
                 INSERT INTO appointments 
-                    (student_id, staff_id, slot_id, appointment_date, start_time, end_time, purpose, additional_notes, meeting_location, status, created_at, updated_at)
+                    (student_id, staff_id, slot_id, appointment_date, start_time, end_time, purpose, additional_notes, meeting_location, meeting_link, status, created_at, updated_at)
                 OUTPUT INSERTED.*
                 VALUES 
-                    (@student_id, @staff_id, @slot_id, @appointment_date, @start_time, @end_time, @purpose, @additional_notes, @meeting_location, 'pending', GETDATE(), GETDATE())
+                    (@student_id, @staff_id, @slot_id, @appointment_date, @start_time, @end_time, @purpose, @additional_notes, @meeting_location, @meeting_link, 'pending', GETDATE(), GETDATE())
             `);
-        return result.recordset[0];
+        const appointment = result.recordset[0];
+        appointment.start_time = formatTimeField(appointment.start_time);
+        appointment.end_time = formatTimeField(appointment.end_time);
+        return appointment;
     },
 
-    // Check if slot is already booked on a given date
     isSlotTaken: async (staffId, appointmentDate, startTime) => {
         const pool = getPool();
         const result = await pool.request()
@@ -87,7 +99,7 @@ const AppointmentModel = {
         return result.recordset[0].count > 0;
     },
 
-    // Get appointments for a student
+    // Get appointments for a student, now includes meeting_link and fixed times
     getStudentAppointments: async (studentId, status = '') => {
         const pool = getPool();
         const request = pool.request().input('student_id', sql.Int, studentId);
@@ -107,6 +119,7 @@ const AppointmentModel = {
                 a.additional_notes,
                 a.status,
                 a.meeting_location,
+                a.meeting_link,
                 a.created_at,
                 sp.first_name AS staff_first_name,
                 sp.last_name AS staff_last_name,
@@ -121,10 +134,14 @@ const AppointmentModel = {
             ${where}
             ORDER BY a.appointment_date DESC, a.start_time DESC
         `);
-        return result.recordset;
+        return result.recordset.map(row => ({
+            ...row,
+            start_time: formatTimeField(row.start_time),
+            end_time: formatTimeField(row.end_time),
+        }));
     },
 
-    // Get appointments for a staff member
+    // Get appointments for a staff member, fixed times
     getStaffAppointments: async (staffId, status = '') => {
         const pool = getPool();
         const request = pool.request().input('staff_id', sql.Int, staffId);
@@ -144,6 +161,7 @@ const AppointmentModel = {
                 a.additional_notes,
                 a.status,
                 a.meeting_location,
+                a.meeting_link,
                 a.created_at,
                 s.first_name AS student_first_name,
                 s.last_name AS student_last_name,
@@ -155,10 +173,13 @@ const AppointmentModel = {
             ${where}
             ORDER BY a.appointment_date ASC, a.start_time ASC
         `);
-        return result.recordset;
+        return result.recordset.map(row => ({
+            ...row,
+            start_time: formatTimeField(row.start_time),
+            end_time: formatTimeField(row.end_time),
+        }));
     },
 
-    // Get single appointment by id
     findById: async (appointmentId) => {
         const pool = getPool();
         const result = await pool.request()
@@ -174,10 +195,13 @@ const AppointmentModel = {
                 INNER JOIN staff_profiles sp ON a.staff_id = sp.staff_id
                 WHERE a.appointment_id = @appointment_id
             `);
-        return result.recordset[0] || null;
+        const row = result.recordset[0];
+        if (!row) return null;
+        row.start_time = formatTimeField(row.start_time);
+        row.end_time = formatTimeField(row.end_time);
+        return row;
     },
 
-    // Update appointment status
     updateStatus: async (appointmentId, status, extra = {}) => {
         const pool = getPool();
         let setClause = 'status = @status, updated_at = GETDATE()';
@@ -201,10 +225,14 @@ const AppointmentModel = {
             OUTPUT INSERTED.*
             WHERE appointment_id = @appointment_id
         `);
-        return result.recordset[0];
+        const row = result.recordset[0];
+        if (row) {
+            row.start_time = formatTimeField(row.start_time);
+            row.end_time = formatTimeField(row.end_time);
+        }
+        return row;
     },
 
-    // Cancel by student — only allowed if > 2 hours before
     canStudentCancel: async (appointmentId) => {
         const pool = getPool();
         const result = await pool.request()

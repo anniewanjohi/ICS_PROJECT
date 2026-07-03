@@ -7,6 +7,15 @@ const { logAction } = require('../../utils/logger');
 const router = express.Router();
 router.use(AuthMiddleware.protect);
 
+function formatTimeField(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    const hours = String(value.getUTCHours()).padStart(2, '0');
+    const minutes = String(value.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(value.getUTCSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+}
+
 // GET /api/v1/staff/profile
 router.get('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
@@ -84,7 +93,7 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
     }
 });
 
-// GET /api/v1/staff/availability
+// GET /api/v1/staff/availability — fixed 1970 bug, times now returned as clean strings
 router.get('/availability', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
         const pool = getPool();
@@ -100,16 +109,22 @@ router.get('/availability', AuthMiddleware.restrictTo('staff'), async (req, res)
             .input('staff_id', sql.Int, staffResult.recordset[0].staff_id)
             .query('SELECT * FROM dbo.availability_slots WHERE staff_id = @staff_id ORDER BY day_of_week, start_time');
 
-        return res.status(200).json({ success: true, data: { slots: result.recordset } });
+        const slots = result.recordset.map(slot => ({
+            ...slot,
+            start_time: formatTimeField(slot.start_time),
+            end_time: formatTimeField(slot.end_time),
+        }));
+
+        return res.status(200).json({ success: true, data: { slots } });
     } catch (error) {
         return res.status(500).json({ success: false, message: 'Error fetching availability' });
     }
 });
 
-// POST /api/v1/staff/availability
+// POST /api/v1/staff/availability — supports Google Meet link for online slots
 router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
-        const { dayOfWeek, startTime, endTime, slotDuration, location, isRecurring, specificDate } = req.body;
+        const { dayOfWeek, startTime, endTime, slotDuration, location, isRecurring, specificDate, meetingLink } = req.body;
 
         if (!startTime || !endTime) {
             return res.status(400).json({ success: false, message: 'startTime and endTime are required' });
@@ -121,6 +136,11 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
             return res.status(400).json({ success: false, message: 'specificDate required for one-off slots' });
         }
 
+        const isOnline = (location || '').toLowerCase().includes('online');
+        if (isOnline && !meetingLink) {
+            return res.status(400).json({ success: false, message: 'A Google Meet link is required for online slots' });
+        }
+
         const pool = getPool();
         const staffResult = await pool.request()
             .input('user_id', sql.Int, req.user.userId)
@@ -130,13 +150,15 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
             return res.status(404).json({ success: false, message: 'Staff profile not found' });
         }
 
+        const finalLocation = (isOnline && meetingLink) ? `Online — ${meetingLink}` : (location || null);
+
         const result = await pool.request()
             .input('staff_id', sql.Int, staffResult.recordset[0].staff_id)
             .input('day_of_week', sql.Int, dayOfWeek || null)
             .input('start_time', sql.VarChar, startTime)
             .input('end_time', sql.VarChar, endTime)
             .input('slot_duration', sql.Int, slotDuration || 30)
-            .input('location', sql.VarChar, location || null)
+            .input('location', sql.VarChar, finalLocation)
             .input('is_recurring', sql.Bit, isRecurring ? 1 : 0)
             .input('specific_date', sql.Date, specificDate || null)
             .query(`
@@ -146,7 +168,11 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
                 VALUES (@staff_id, @day_of_week, @start_time, @end_time, @slot_duration, @location, @is_recurring, @specific_date, 1, GETDATE(), GETDATE())
             `);
 
-        return res.status(201).json({ success: true, message: 'Slot added', data: { slot: result.recordset[0] } });
+        const newSlot = result.recordset[0];
+        newSlot.start_time = formatTimeField(newSlot.start_time);
+        newSlot.end_time = formatTimeField(newSlot.end_time);
+
+        return res.status(201).json({ success: true, message: 'Slot added', data: { slot: newSlot } });
     } catch (error) {
         console.error('Add slot error:', error);
         return res.status(500).json({ success: false, message: 'Error adding slot' });
@@ -176,7 +202,7 @@ router.delete('/availability/:slotId', AuthMiddleware.restrictTo('staff'), async
     }
 });
 
-// PATCH /api/v1/staff/student-profile  — students update their own profile
+// PATCH /api/v1/staff/student-profile — students update their own profile
 router.patch('/student-profile', AuthMiddleware.restrictTo('student'), async (req, res) => {
     try {
         const {
