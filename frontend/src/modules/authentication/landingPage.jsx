@@ -152,10 +152,11 @@ const LandingPage = () => {
             <span>✉ directory@strathmore.edu</span>
           </div>
           <div className="lp-topbar-links">
-            <a href="#">University Website</a>
-            <a href="#">AMS</a>
-            <a href="#">eLearning</a>
-            <a href="#">Library</a>
+            {/* UPDATED: Real URLs for University Website, AMS (CAS login), eLearning, Library */}
+            <a href="https://strathmore.edu" target="_blank" rel="noopener noreferrer">University Website</a>
+            <a href="https://su-sso.strathmore.edu/cas-prd/login?service=https%3A%2F%2Fsu-sso.strathmore.edu%2Fsusams%2Fservlet%2Fedu%2Fstrathmore%2Fams%2Fsusams%2FInit.html" target="_blank" rel="noopener noreferrer">AMS</a>
+            <a href="https://elearning.strathmore.edu" target="_blank" rel="noopener noreferrer">eLearning</a>
+            <a href="https://opac.library.strathmore.edu" target="_blank" rel="noopener noreferrer">Library</a>
           </div>
         </div>
       </div>
@@ -300,10 +301,11 @@ const LandingPage = () => {
             <div className="lp-footer-col">
               <h4>Info</h4>
               <ul>
-                <li><a href="#">Library</a></li>
-                <li><a href="#">Webmail</a></li>
-                <li><a href="#">AMS Students' Module</a></li>
-                <li><a href="#">Digital Repository</a></li>
+                {/* UPDATED: Real URLs in footer */}
+                <li><a href="https://opac.library.strathmore.edu" target="_blank" rel="noopener noreferrer">Library</a></li>
+                <li><a href="https://strathmore.edu" target="_blank" rel="noopener noreferrer">Webmail</a></li>
+                <li><a href="https://su-sso.strathmore.edu/cas-prd/login?service=https%3A%2F%2Fsu-sso.strathmore.edu%2Fsusams%2Fservlet%2Fedu%2Fstrathmore%2Fams%2Fsusams%2FInit.html" target="_blank" rel="noopener noreferrer">AMS Students' Module</a></li>
+                <li><a href="https://elearning.strathmore.edu" target="_blank" rel="noopener noreferrer">Digital Repository</a></li>
               </ul>
             </div>
             <div className="lp-footer-col">
