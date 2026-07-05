@@ -3,10 +3,11 @@ const DirectoryModel = require('./directoryModel');
 
 class DirectoryController {
 
-    // GET /api/v1/directory/search?query=&staffType=&departmentId=&page=&limit=
     static async search(req, res) {
         try {
             const { query, staffType, departmentId, page = 1, limit = 12 } = req.query;
+
+            console.log('🔍 Directory search request:', { query, staffType, departmentId, page, limit });
 
             const results = await DirectoryModel.search({
                 query: query || '',
@@ -16,14 +17,22 @@ class DirectoryController {
                 limit: parseInt(limit)
             });
 
-            return res.status(200).json({ success: true, data: results });
+            console.log(`✅ Returning ${results.staff?.length || 0} results`);
+
+            return res.status(200).json({ 
+                success: true, 
+                data: results 
+            });
         } catch (error) {
-            console.error('Directory search error:', error);
-            return res.status(500).json({ success: false, message: 'Error fetching directory' });
+            console.error('❌ Directory search error:', error);
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Error fetching directory',
+                error: error.message 
+            });
         }
     }
 
-    // GET /api/v1/directory/staff/:staffId
     static async getProfile(req, res) {
         try {
             const { staffId } = req.params;
@@ -42,7 +51,6 @@ class DirectoryController {
         }
     }
 
-    // GET /api/v1/directory/departments
     static async getDepartments(req, res) {
         try {
             const departments = await DirectoryModel.getDepartments();
@@ -53,7 +61,6 @@ class DirectoryController {
         }
     }
 
-    // GET /api/v1/directory/filters
     static async getFilters(req, res) {
         try {
             const filters = await DirectoryModel.getFilters();

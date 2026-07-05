@@ -10,7 +10,7 @@ router.use(AuthMiddleware.protect);
 
 router.get('/search', DirectoryController.search);
 router.get('/departments', DirectoryController.getDepartments);
-router.get('/filters', DirectoryController.getFilters);  // NEW: Get filter options
+router.get('/filters', DirectoryController.getFilters);
 router.get('/staff/:staffId', DirectoryController.getProfile);
 
 module.exports = router;
