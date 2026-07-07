@@ -29,7 +29,32 @@ const typeColor = (t) => {
     return colors[t] || '#64748b';
 };
 
-const statusColor = (s) => ({ pending: '#f59e0b', confirmed: '#10b981', cancelled: '#ef4444', completed: '#6366f1' }[s] || '#6b7280');
+const renderRoleBadges = (item) => {
+    const badges = [];
+    const isStudentRep = item.source_type === 'student_rep';
+    
+    if (!isStudentRep && item.staff_type) {
+        const label = typeLabel(item.staff_type);
+        if (label) {
+            badges.push(<Badge key="main" label={label} color={typeColor(item.staff_type)} />);
+        }
+    }
+    
+    if (item.is_mentor === true || item.is_mentor === 1) {
+        badges.push(<Badge key="mentor" label="Mentor" color="#7c3aed" />);
+    }
+    
+    if (isStudentRep && item.rep_role) {
+        const roles = item.rep_role.split(',').map(r => r.trim());
+        roles.forEach((role, idx) => {
+            if (role && role !== 'Student Rep' && role !== 'student_representative') {
+                badges.push(<Badge key={`rep-${idx}`} label={role} color="#b45309" />);
+            }
+        });
+    }
+    
+    return badges;
+};
 
 const styles = {
     container: { minHeight: '100vh', background: '#f8fafc', fontFamily: 'Inter, sans-serif' },
@@ -47,32 +72,6 @@ const styles = {
     fabBadge: { position: 'absolute', top: -6, right: -6, background: '#ef4444', color: '#fff', borderRadius: '50%', padding: '2px 8px', fontSize: 11, fontWeight: 700, minWidth: 20, textAlign: 'center' },
 };
 
-const renderRoleBadges = (item) => {
-    const badges = [];
-    
-    const isStudentRep = item.source_type === 'student_rep';
-    
-    if (!isStudentRep && item.staff_type) {
-        const label = typeLabel(item.staff_type);
-        if (label) {
-            badges.push(<Badge key="main" label={label} color={typeColor(item.staff_type)} />);
-        }
-    }
-    
-    if (item.is_mentor === true || item.is_mentor === 1) {
-        badges.push(<Badge key="mentor" label="Mentor" color="#7c3aed" />);
-    }
-    
-    if (isStudentRep && item.rep_role) {
-        const roles = item.rep_role.split(',').map(r => r.trim());
-        roles.forEach((role, idx) => {
-            badges.push(<Badge key={`rep-${idx}`} label={role} color="#b45309" />);
-        });
-    }
-    
-    return badges;
-};
-
 export default function StaffDashboard() {
     const { user, logout } = useAuth();
     const [view, setView] = useState('directory');
@@ -85,14 +84,49 @@ export default function StaffDashboard() {
     const [msg, setMsg] = useState('');
     const [error, setError] = useState('');
     const [editMode, setEditMode] = useState(false);
-    const [departments, setDepartments] = useState([]);
     const [pendingCount, setPendingCount] = useState(0);
+    const [faculties, setFaculties] = useState([]);
 
     const [dirQuery, setDirQuery] = useState('');
     const [dirTypeFilter, setDirTypeFilter] = useState('');
+    const [dirFacultyFilter, setDirFacultyFilter] = useState('');
     const [dirResults, setDirResults] = useState([]);
     const [dirLoading, setDirLoading] = useState(false);
     const [searchTimer, setSearchTimer] = useState(null);
+
+    const [profileForm, setProfileForm] = useState({
+        firstName: '', lastName: '', title: '', position: '', staffType: 'lecturer',
+        isMentor: false, officeLocation: '', officeHours: '', officialEmail: '',
+        areasOfSpecialization: '', biography: '', isAvailableForBooking: true,
+        faculty: '', phoneExtension: ''
+    });
+
+    const [slotForm, setSlotForm] = useState({
+        dayOfWeek: '', startTime: '', endTime: '', slotDuration: 30,
+        location: '', isRecurring: true, specificDate: '', meetingLink: '',
+        officeLocation: '', meetingType: 'physical'
+    });
+
+    const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+    const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState(null);
+    const [rescheduleData, setRescheduleData] = useState({ date: '', startTime: '', endTime: '', reason: '' });
+    const [rescheduleLoading, setRescheduleLoading] = useState(false);
+
+    const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
+    const [attendanceAppointmentId, setAttendanceAppointmentId] = useState(null);
+    const [attendanceStatus, setAttendanceStatus] = useState('');
+
+    const facultyFilterButtons = [
+        { val: '', label: 'All Faculties' },
+        { val: 'SCES', label: 'SCES' },
+        { val: 'SOB', label: 'SOB' },
+        { val: 'SHSS', label: 'SHSS' },
+        { val: 'SOL', label: 'SOL' },
+        { val: 'STH', label: 'STH' },
+        { val: 'SIMS', label: 'SIMS' },
+        { val: 'SIMT', label: 'SIMT' },
+        { val: 'CRTS', label: 'CRTS' },
+    ];
 
     useEffect(() => {
         if (view === 'directory') {
@@ -101,38 +135,22 @@ export default function StaffDashboard() {
             }, 100);
             return () => clearTimeout(delayDebounce);
         }
-    }, [dirTypeFilter]);
+    }, [dirTypeFilter, dirFacultyFilter]);
 
-    // Auto-search on type (debounced)
     useEffect(() => {
-        if (searchTimer) {
-            clearTimeout(searchTimer);
-        }
+        if (searchTimer) clearTimeout(searchTimer);
         const timer = setTimeout(() => {
-            if (view === 'directory') {
-                handleDirectorySearch();
-            }
+            if (view === 'directory') handleDirectorySearch();
         }, 300);
         setSearchTimer(timer);
         return () => clearTimeout(timer);
     }, [dirQuery]);
 
-    const [profileForm, setProfileForm] = useState({
-        firstName: '', lastName: '', title: '', position: '', staffType: 'lecturer',
-        isMentor: false, officeLocation: '', officeHours: '', officialEmail: '',
-        areasOfSpecialization: '', biography: '', isAvailableForBooking: true,
-        departmentId: '', phoneExtension: ''
-    });
-
-    const [slotForm, setSlotForm] = useState({
-        dayOfWeek: '', startTime: '', endTime: '', slotDuration: 30,
-        location: '', isRecurring: true, specificDate: '', meetingLink: '',
-        officeLocation: ''
-    });
-
     useEffect(() => { 
         loadAppointments(); 
         loadNotifications(); 
+        loadFaculties();
+        loadSlots();
         setTimeout(handleDirectorySearch, 300);
     }, []);
 
@@ -146,8 +164,13 @@ export default function StaffDashboard() {
         if (res.success) setAppointments(res.data.appointments);
     };
 
+    const loadFaculties = async () => {
+        const res = await api.getFaculties();
+        if (res.success) setFaculties(res.data.faculties);
+    };
+
     const loadProfile = async () => {
-        const [profileRes, deptRes] = await Promise.all([api.getMyStaffProfile(), api.getDepartments()]);
+        const profileRes = await api.getMyStaffProfile();
         if (profileRes.success) {
             const p = profileRes.data.profile;
             setProfile(p);
@@ -164,17 +187,27 @@ export default function StaffDashboard() {
                 areasOfSpecialization: p.areas_of_specialization || '',
                 biography: p.biography || '',
                 isAvailableForBooking: p.is_available_for_booking === 1 || p.is_available_for_booking === true,
-                departmentId: p.department_id || '',
+                faculty: p.faculty || '',
                 phoneExtension: p.phone_extension || '',
             });
             setSlotForm(prev => ({ ...prev, officeLocation: p.office_location || '' }));
         }
-        if (deptRes.success) setDepartments(deptRes.data.departments);
     };
 
     const loadSlots = async () => {
-        const res = await api.getMyAvailability();
-        if (res.success) setSlots(res.data.slots);
+        try {
+            const res = await api.getMyAvailability();
+            console.log('Slots response:', res);
+            if (res.success) {
+                setSlots(res.data.slots || []);
+            } else {
+                console.error('Failed to load slots:', res.message);
+                setError('Failed to load slots: ' + (res.message || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error('Load slots error:', err);
+            setError('Error loading slots');
+        }
     };
 
     const loadNotifications = async () => {
@@ -187,7 +220,8 @@ export default function StaffDashboard() {
         try {
             const res = await api.searchDirectory({ 
                 query: dirQuery, 
-                staffType: dirTypeFilter, 
+                staffType: dirTypeFilter,
+                faculty: dirFacultyFilter,
                 page: 1, 
                 limit: 20 
             });
@@ -219,6 +253,49 @@ export default function StaffDashboard() {
         }
     };
 
+    const getAppointmentStatus = (appt) => {
+        const apptDateTime = new Date(appt.appointment_date + 'T' + (appt.start_time || '00:00:00'));
+        const isPast = apptDateTime < new Date();
+        
+        if (isPast && appt.meeting_status !== 'attended') {
+            return { 
+                status: 'missed', 
+                label: 'MISSED', 
+                color: '#dc2626', 
+                bg: '#fef2f2', 
+                border: '#dc2626',
+                showConfirm: false,
+                showDecline: false,
+                showCancel: false,
+                showReschedule: false,
+                showAttendance: false,
+                buttonText: 'MISSED'
+            };
+        }
+        
+        if (appt.status === 'cancelled') {
+            return { status: 'cancelled', label: 'CANCELLED', color: '#dc2626', bg: '#fef2f2', border: '#dc2626', showConfirm: false, showDecline: false, showCancel: false, showReschedule: false, showAttendance: false, buttonText: 'CANCELLED' };
+        }
+        
+        if (appt.status === 'declined' || appt.status === 'rejected') {
+            return { status: 'rejected', label: 'DECLINED', color: '#dc2626', bg: '#fef2f2', border: '#dc2626', showConfirm: false, showDecline: false, showCancel: false, showReschedule: false, showAttendance: false, buttonText: 'DECLINED' };
+        }
+        
+        if (appt.meeting_status === 'attended') {
+            return { status: 'attended', label: 'ATTENDED', color: '#10b981', bg: '#ecfdf5', border: '#10b981', showConfirm: false, showDecline: false, showCancel: false, showReschedule: false, showAttendance: false, buttonText: 'ATTENDED' };
+        }
+        
+        if (appt.meeting_status === 'missed') {
+            return { status: 'missed', label: 'MISSED', color: '#dc2626', bg: '#fef2f2', border: '#dc2626', showConfirm: false, showDecline: false, showCancel: false, showReschedule: false, showAttendance: false, buttonText: 'MISSED' };
+        }
+        
+        if (appt.status === 'confirmed') {
+            return { status: 'confirmed', label: 'CONFIRMED', color: '#10b981', bg: '#ecfdf5', border: '#10b981', showConfirm: false, showDecline: false, showCancel: true, showReschedule: true, showAttendance: true, buttonText: 'CONFIRMED' };
+        }
+        
+        return { status: 'pending', label: 'PENDING', color: '#f59e0b', bg: '#fffbeb', border: '#f59e0b', showConfirm: true, showDecline: true, showCancel: false, showReschedule: false, showAttendance: false, buttonText: 'PENDING' };
+    };
+
     const handleRespond = async (appointmentId, status) => {
         const reason = status === 'declined' ? prompt('Reason for declining (optional):') : '';
         const res = await api.respondToAppointment(appointmentId, status, reason || '');
@@ -233,6 +310,89 @@ export default function StaffDashboard() {
         }
     };
 
+    const handleCancelAppointment = async (appointmentId) => {
+        const reason = prompt('Reason for cancelling:');
+        if (reason === null) return;
+        const res = await api.cancelAppointment(appointmentId, reason);
+        if (res.success) {
+            loadAppointments();
+            loadNotifications();
+            setMsg('Appointment cancelled successfully.');
+            setTimeout(() => setMsg(''), 3000);
+        } else {
+            setError(res.message || 'Failed to cancel.');
+            setTimeout(() => setError(''), 3000);
+        }
+    };
+
+    const openRescheduleModal = (appointmentId) => {
+        setRescheduleAppointmentId(appointmentId);
+        setRescheduleData({ date: '', startTime: '', endTime: '', reason: '' });
+        setRescheduleModalOpen(true);
+    };
+
+    const handleRescheduleConfirm = async () => {
+        if (!rescheduleData.date || !rescheduleData.startTime || !rescheduleData.endTime) {
+            setError('Please fill in all reschedule fields.');
+            return;
+        }
+        
+        setRescheduleLoading(true);
+        setError('');
+        try {
+            const res = await api.rescheduleAppointment(rescheduleAppointmentId, rescheduleData);
+            if (res.success) {
+                setRescheduleModalOpen(false);
+                setRescheduleAppointmentId(null);
+                setRescheduleData({ date: '', startTime: '', endTime: '', reason: '' });
+                loadAppointments();
+                loadNotifications();
+                setMsg('Appointment rescheduled successfully.');
+                setTimeout(() => setMsg(''), 3000);
+            } else {
+                setError(res.message || 'Failed to reschedule appointment.');
+            }
+        } catch (error) {
+            console.error('Reschedule error:', error);
+            setError('Network error. Please try again.');
+        }
+        setRescheduleLoading(false);
+    };
+
+    const openAttendanceModal = (appointmentId) => {
+        setAttendanceAppointmentId(appointmentId);
+        setAttendanceStatus('');
+        setAttendanceModalOpen(true);
+    };
+
+    const handleAttendanceConfirm = async () => {
+        if (!attendanceStatus) {
+            setError('Please select attended or missed.');
+            return;
+        }
+        
+        setLoading(true);
+        setError('');
+        try {
+            const res = await api.markAppointmentAttendance(attendanceAppointmentId, attendanceStatus);
+            if (res.success) {
+                setAttendanceModalOpen(false);
+                setAttendanceAppointmentId(null);
+                setAttendanceStatus('');
+                loadAppointments();
+                loadNotifications();
+                setMsg(`Appointment marked as ${attendanceStatus}.`);
+                setTimeout(() => setMsg(''), 3000);
+            } else {
+                setError(res.message || 'Failed to mark attendance.');
+            }
+        } catch (error) {
+            console.error('Attendance error:', error);
+            setError('Network error. Please try again.');
+        }
+        setLoading(false);
+    };
+
     const handleProfileSave = async (e) => {
         e.preventDefault(); setLoading(true); setMsg(''); setError('');
         const res = await api.updateStaffProfile(profileForm);
@@ -242,51 +402,105 @@ export default function StaffDashboard() {
     };
 
     const handleAddSlot = async (e) => {
-        e.preventDefault(); setLoading(true); setMsg(''); setError('');
+        e.preventDefault(); 
+        setLoading(true); 
+        setMsg(''); 
+        setError('');
         
-        let locationStr = '';
-        if (slotForm.officeLocation) {
-            locationStr += slotForm.officeLocation;
-        }
-        if (slotForm.meetingLink) {
-            if (locationStr) locationStr += ' | ';
-            locationStr += `Online: ${slotForm.meetingLink}`;
-        }
-        if (!locationStr) {
-            setError('Please provide either a physical location or a Google Meet link.');
+        if (!slotForm.startTime || !slotForm.endTime) {
+            setError('Start time and end time are required.');
             setLoading(false);
             return;
         }
         
-        const res = await api.addAvailabilitySlot({
-            ...slotForm,
-            location: locationStr,
-            meetingLink: slotForm.meetingLink
-        });
-        if (res.success) {
-            setMsg('Slot added successfully.');
-            loadSlots();
-            setSlotForm({ dayOfWeek: '', startTime: '', endTime: '', slotDuration: 30, location: '', isRecurring: true, specificDate: '', meetingLink: '', officeLocation: profile?.office_location || '' });
-            setTimeout(() => setMsg(''), 3000);
+        if (slotForm.isRecurring && !slotForm.dayOfWeek) {
+            setError('Please select a day of the week for recurring slots.');
+            setLoading(false);
+            return;
+        }
+        
+        if (!slotForm.isRecurring && !slotForm.specificDate) {
+            setError('Please select a date for one-off slots.');
+            setLoading(false);
+            return;
+        }
+        
+        let locationStr = '';
+        let isOnline = slotForm.meetingType === 'online';
+        
+        if (isOnline) {
+            locationStr = 'Online';
         } else {
-            setError(res.message || 'Failed to add slot.');
+            if (!slotForm.officeLocation) {
+                setError('Please provide a physical location.');
+                setLoading(false);
+                return;
+            }
+            locationStr = slotForm.officeLocation;
+        }
+        
+        if (!locationStr) {
+            setError('Please provide either a physical location or select Online.');
+            setLoading(false);
+            return;
+        }
+        
+        try {
+            const res = await api.addAvailabilitySlot({
+                dayOfWeek: slotForm.isRecurring ? parseInt(slotForm.dayOfWeek) : null,
+                startTime: slotForm.startTime,
+                endTime: slotForm.endTime,
+                slotDuration: parseInt(slotForm.slotDuration) || 30,
+                location: locationStr,
+                isRecurring: slotForm.isRecurring,
+                specificDate: slotForm.isRecurring ? null : slotForm.specificDate,
+                meetingLink: null
+            });
+            
+            console.log('Add slot response:', res);
+            
+            if (res.success) {
+                setMsg('Slot added successfully.');
+                setSlotForm({ 
+                    dayOfWeek: '', startTime: '', endTime: '', slotDuration: 30, 
+                    location: '', isRecurring: true, specificDate: '', meetingLink: '', 
+                    officeLocation: profile?.office_location || '',
+                    meetingType: 'physical'
+                });
+                loadSlots();
+                setTimeout(() => setMsg(''), 3000);
+            } else {
+                setError(res.message || 'Failed to add slot.');
+                setTimeout(() => setError(''), 3000);
+            }
+        } catch (err) {
+            console.error('Add slot error:', err);
+            setError('Error adding slot: ' + (err.message || 'Unknown error'));
             setTimeout(() => setError(''), 3000);
         }
         setLoading(false);
     };
 
     const handleDeleteSlot = async (slotId) => {
+        console.log('🔄 Attempting to delete slot ID:', slotId);
         if (!window.confirm('Remove this availability slot?')) return;
         setLoading(true);
         setError('');
         setMsg('');
-        const res = await api.deleteAvailabilitySlot(slotId);
-        if (res.success) { 
-            loadSlots(); 
-            setMsg('Slot removed successfully.');
-            setTimeout(() => setMsg(''), 3000);
-        } else {
-            setError(res.message || 'Failed to remove slot. Please try again.');
+        try {
+            const res = await api.deleteAvailabilitySlot(slotId);
+            console.log('📦 Delete response:', res);
+            if (res.success) { 
+                loadSlots(); 
+                setMsg('Slot removed successfully.');
+                setTimeout(() => setMsg(''), 3000);
+            } else {
+                setError(res.message || 'Failed to remove slot. Please try again.');
+                setTimeout(() => setError(''), 3000);
+            }
+        } catch (err) {
+            console.error('❌ Delete slot error:', err);
+            setError('Error removing slot: ' + (err.message || 'Unknown error'));
             setTimeout(() => setError(''), 3000);
         }
         setLoading(false);
@@ -310,7 +524,6 @@ export default function StaffDashboard() {
     };
 
     const pending = appointments.filter(a => a.status === 'pending');
-    const upcoming = appointments.filter(a => a.status === 'confirmed' && new Date(a.appointment_date) >= new Date());
 
     const handleFilterClick = (val) => {
         setDirTypeFilter(val);
@@ -319,7 +532,7 @@ export default function StaffDashboard() {
     return (
         <div style={styles.container}>
             <nav style={styles.navbar}>
-                <span style={{ fontWeight: 700, fontSize: 16 }}>📚 SU Directory — Staff</span>
+                <span style={{ fontWeight: 700, fontSize: 16 }}>SU Directory — Staff</span>
                 <div style={{ display: 'flex', gap: 4 }}>
                     <button style={styles.navBtn(view === 'directory')} onClick={() => handleViewChange('directory')}>Directory</button>
                     <button style={styles.navBtn(view === 'appointments')} onClick={() => handleViewChange('appointments')}>
@@ -345,20 +558,20 @@ export default function StaffDashboard() {
                 {view === 'directory' && (
                     <div>
                         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744', marginBottom: 4 }}>Personnel Directory</h1>
-                        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Search for other staff members and student representatives across the university.</p>
+                        <p style={{ color: '#64748b', fontSize: 14, marginBottom: 20 }}>Search for staff members and student representatives across the university.</p>
                         
                         <div style={styles.card}>
                             <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
                                 <input 
                                     style={{ ...styles.input, flex: 1, marginBottom: 0 }} 
-                                    placeholder="Search by name, department, specialisation..." 
+                                    placeholder="Search by name, faculty, office, specialisation..." 
                                     value={dirQuery} 
                                     onChange={e => setDirQuery(e.target.value)}
                                 />
                                 <button style={styles.btn()} onClick={handleDirectorySearch}>Search</button>
                             </div>
                             
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                                 {[
                                     { val: '', label: 'All' },
                                     { val: 'lecturer', label: 'Lecturers' },
@@ -384,48 +597,72 @@ export default function StaffDashboard() {
                                     </button>
                                 ))}
                             </div>
+                            
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                {facultyFilterButtons.map(({ val, label }) => (
+                                    <button key={val} onClick={() => setDirFacultyFilter(val)}
+                                        style={{ background: dirFacultyFilter === val ? '#1a2744' : '#f1f5f9', color: dirFacultyFilter === val ? '#fff' : '#475569', border: 'none', borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         
                         {dirLoading ? (
                             <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Searching...</div>
                         ) : dirResults.length === 0 ? (
                             <div style={{ ...styles.card, textAlign: 'center', padding: 40, color: '#64748b' }}>
-                                {dirQuery || dirTypeFilter ? 'No results found. Try a different search.' : 'Search for staff members and student representatives.'}
+                                {dirQuery || dirTypeFilter || dirFacultyFilter ? 'No results found. Try a different search.' : 'Search for staff members and student representatives.'}
                             </div>
                         ) : (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-                                {dirResults.map((item, i) => (
-                                    <div key={i} style={styles.card}>
-                                        <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                                            <Avatar name={`${item.first_name} ${item.last_name}`} />
-                                            <div>
-                                                <div style={{ fontWeight: 600, fontSize: 14, color: '#1a2744' }}>
-                                                    {item.title ? `${item.title} ` : ''}{item.first_name} {item.last_name}
+                                {dirResults.map((item, i) => {
+                                    const positionLine = item.position || '';
+                                    
+                                    return (
+                                        <div key={i} style={styles.card}>
+                                            <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}>
+                                                <Avatar name={`${item.first_name} ${item.last_name}`} />
+                                                <div>
+                                                    <div style={{ fontWeight: 600, fontSize: 16, color: '#1a2744' }}>
+                                                        {item.first_name} {item.last_name}
+                                                    </div>
+                                                    {positionLine && (
+                                                        <div style={{ fontSize: 13, color: '#64748b' }}>
+                                                            {positionLine}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div style={{ fontSize: 12, color: '#64748b' }}>{item.position || item.rep_role || item.staff_type}</div>
-                                                <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.department_name || item.dept_name || item.program}</div>
+                                            </div>
+                                            
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                                                {renderRoleBadges(item)}
+                                            </div>
+                                            
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                                {item.faculty && (
+                                                    <div style={{ fontSize: 12, color: '#8b5cf6' }}>{item.faculty}</div>
+                                                )}
+                                                {item.department_name && !item.faculty && (
+                                                    <div style={{ fontSize: 12, color: '#94a3b8' }}>{item.department_name}</div>
+                                                )}
+                                                {item.office_location && (
+                                                    <div style={{ fontSize: 12, color: '#64748b' }}>📍 {item.office_location}</div>
+                                                )}
+                                                {item.official_email && (
+                                                    <div style={{ fontSize: 12, color: '#1a2744' }}>
+                                                        <a href={`mailto:${item.official_email}`} style={{ color: '#1a2744', textDecoration: 'underline' }}>
+                                                            {item.official_email}
+                                                        </a>
+                                                    </div>
+                                                )}
+                                                {item.phone_extension && (
+                                                    <div style={{ fontSize: 12, color: '#64748b' }}>📞 {item.phone_extension}</div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                                            {renderRoleBadges(item)}
-                                        </div>
-                                        <div style={{ fontSize: 12, color: '#475569', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                            {item.official_email && (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    ✉️ 
-                                                    <a href={`mailto:${item.official_email}`} 
-                                                       style={{ color: '#1a2744', textDecoration: 'underline', cursor: 'pointer' }}
-                                                       onMouseEnter={e => e.currentTarget.style.color = '#4a7ab5'}
-                                                       onMouseLeave={e => e.currentTarget.style.color = '#1a2744'}>
-                                                        {item.official_email}
-                                                    </a>
-                                                </div>
-                                            )}
-                                            {item.phone_extension && <div>📞 {item.phone_extension}</div>}
-                                            {item.office_location && <div>📍 {item.office_location}</div>}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -445,17 +682,12 @@ export default function StaffDashboard() {
                                                     {appt.student_first_name} {appt.student_last_name}
                                                     <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 8 }}>({appt.student_reg_no})</span>
                                                 </div>
-                                                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{appt.program} · Year {appt.year_of_study}</div>
+                                                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{appt.program}</div>
                                                 <div style={{ fontSize: 13, color: '#475569', marginBottom: 4 }}>
                                                     {new Date(appt.appointment_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {appt.start_time?.substring(0, 5)} – {appt.end_time?.substring(0, 5)}
                                                 </div>
                                                 <div style={{ fontSize: 13, color: '#475569' }}>Purpose: {appt.purpose}</div>
                                                 {appt.additional_notes && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Note: {appt.additional_notes}</div>}
-                                                {appt.meeting_link && appt.status === 'confirmed' && (
-                                                    <div style={{ fontSize: 12, color: '#1a2744', marginTop: 4 }}>
-                                                        🔗 <a href={appt.meeting_link} target="_blank" rel="noopener noreferrer">{appt.meeting_link}</a>
-                                                    </div>
-                                                )}
                                             </div>
                                             <div style={{ display: 'flex', gap: 8 }}>
                                                 <button onClick={() => handleRespond(appt.appointment_id, 'confirmed')} style={styles.btn('#10b981')}>Confirm</button>
@@ -471,35 +703,82 @@ export default function StaffDashboard() {
                             {appointments.length === 0 ? (
                                 <div style={{ ...styles.card, color: '#64748b', textAlign: 'center', padding: 30 }}>No appointments.</div>
                             ) : appointments.map(appt => {
+                                const statusInfo = getAppointmentStatus(appt);
                                 const past = isPastAppointment(appt);
+                                
+                                const cardStyles = {
+                                    ...styles.card,
+                                    background: statusInfo.bg,
+                                    borderLeft: `4px solid ${statusInfo.border}`,
+                                    border: `1px solid ${statusInfo.border}`,
+                                    opacity: past && statusInfo.status !== 'missed' && statusInfo.status !== 'attended' ? 0.6 : 1
+                                };
+                                
                                 return (
-                                    <div key={appt.appointment_id} style={{ ...styles.card, borderLeft: '4px solid #10b981', opacity: past ? 0.6 : 1 }}>
+                                    <div key={appt.appointment_id} style={cardStyles}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div>
                                                 <div style={{ fontWeight: 600, fontSize: 14, color: '#1a2744', marginBottom: 2 }}>
                                                     {appt.student_first_name} {appt.student_last_name}
-                                                    {past && <span style={{ fontSize: 11, color: '#ef4444', marginLeft: 8 }}>📅 Past</span>}
+                                                    <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 8 }}>({appt.student_reg_no})</span>
+                                                    {past && statusInfo.status !== 'attended' && statusInfo.status !== 'missed' && (
+                                                        <span style={{ fontSize: 11, color: '#ef4444', marginLeft: 8 }}>Past</span>
+                                                    )}
                                                 </div>
                                                 <div style={{ fontSize: 13, color: '#64748b' }}>
                                                     {new Date(appt.appointment_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · {appt.start_time?.substring(0, 5)} – {appt.end_time?.substring(0, 5)}
                                                 </div>
                                                 <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>Purpose: {appt.purpose}</div>
-                                                {appt.meeting_link && (
+                                                {appt.additional_notes && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Note: {appt.additional_notes}</div>}
+                                                {appt.meeting_link && appt.status === 'confirmed' && statusInfo.status !== 'missed' && (
                                                     <div style={{ fontSize: 12, marginTop: 4 }}>
-                                                        🔗 <a href={appt.meeting_link} target="_blank" rel="noopener noreferrer" style={{ color: '#1a2744', fontWeight: 600 }}>Join Google Meet</a>
+                                                        <a href={appt.meeting_link} target="_blank" rel="noopener noreferrer" style={{ color: '#1a2744', fontWeight: 600 }}>Join Google Meet</a>
                                                     </div>
+                                                )}
+                                                {appt.status === 'cancelled' && appt.cancellation_reason && (
+                                                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Reason: {appt.cancellation_reason}</div>
+                                                )}
+                                                {appt.status === 'declined' && appt.cancellation_reason && (
+                                                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Reason: {appt.cancellation_reason}</div>
+                                                )}
+                                                {statusInfo.status === 'missed' && (
+                                                    <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4, fontWeight: 600 }}>This appointment was missed</div>
                                                 )}
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                                                <Badge label={appt.status.charAt(0).toUpperCase() + appt.status.slice(1)} color={statusColor(appt.status)} />
-                                                {appt.status === 'pending' && !past && (
+                                                <span style={{ 
+                                                    fontWeight: 700, 
+                                                    fontSize: 12, 
+                                                    color: statusInfo.color,
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px'
+                                                }}>
+                                                    {statusInfo.label}
+                                                </span>
+                                                
+                                                {statusInfo.showConfirm && (
                                                     <div style={{ display: 'flex', gap: 6 }}>
                                                         <button onClick={() => handleRespond(appt.appointment_id, 'confirmed')} style={styles.btn('#10b981')}>Confirm</button>
                                                         <button onClick={() => handleRespond(appt.appointment_id, 'declined')} style={{ background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Decline</button>
                                                     </div>
                                                 )}
-                                                {past && appt.status !== 'cancelled' && appt.status !== 'completed' && (
-                                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Completed</span>
+                                                
+                                                {statusInfo.showCancel && (
+                                                    <button onClick={() => handleCancelAppointment(appt.appointment_id)} style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+                                                        Cancel
+                                                    </button>
+                                                )}
+                                                
+                                                {statusInfo.showReschedule && (
+                                                    <button onClick={() => openRescheduleModal(appt.appointment_id)} style={{ background: '#1a2744', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+                                                        Reschedule
+                                                    </button>
+                                                )}
+                                                
+                                                {statusInfo.showAttendance && (
+                                                    <button onClick={() => openAttendanceModal(appt.appointment_id)} style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+                                                        Mark Attendance
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
@@ -526,10 +805,14 @@ export default function StaffDashboard() {
                                     <Avatar name={`${profile.first_name} ${profile.last_name}`} size={72} />
                                     <div>
                                         <div style={{ fontWeight: 700, fontSize: 20, color: '#1a2744' }}>
-                                            {profile.title ? `${profile.title} ` : ''}{profile.first_name} {profile.last_name}
+                                            {profile.first_name} {profile.last_name}
                                         </div>
-                                        <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{profile.position || profile.staff_type}</div>
-                                        <div style={{ fontSize: 13, color: '#94a3b8' }}>{profile.department_name || 'No department'}</div>
+                                        {profile.position && (
+                                            <div style={{ fontSize: 14, color: '#64748b', marginTop: 2 }}>
+                                                {profile.position}
+                                            </div>
+                                        )}
+                                        <div style={{ fontSize: 13, color: '#8b5cf6' }}>{profile.faculty || 'No faculty'}</div>
                                         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                                             <Badge label={typeLabel(profile.staff_type)} color={typeColor(profile.staff_type)} />
                                             {(profile.is_mentor === 1 || profile.is_mentor === true) && <Badge label="Mentor" color="#7c3aed" />}
@@ -582,14 +865,20 @@ export default function StaffDashboard() {
                                             <select style={styles.input} value={profileForm.staffType} onChange={e => setProfileForm(p => ({ ...p, staffType: e.target.value }))}>
                                                 <option value="lecturer">Lecturer</option>
                                                 <option value="administrative">Administrative Staff</option>
-                                                <option value="student_representative">Student Representative</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label style={styles.label}>Department</label>
-                                            <select style={styles.input} value={profileForm.departmentId} onChange={e => setProfileForm(p => ({ ...p, departmentId: e.target.value }))}>
-                                                <option value="">Select department...</option>
-                                                {departments.map(d => <option key={d.department_id} value={d.department_id}>{d.department_name}</option>)}
+                                            <label style={styles.label}>Faculty</label>
+                                            <select style={styles.input} value={profileForm.faculty || ''} onChange={e => setProfileForm(p => ({ ...p, faculty: e.target.value }))}>
+                                                <option value="">Select Faculty...</option>
+                                                <option value="SCES">SCES - School of Computing and Engineering Sciences</option>
+                                                <option value="SOB">SOB - Strathmore University Business School</option>
+                                                <option value="SHSS">SHSS - School of Humanities and Social Sciences</option>
+                                                <option value="SOL">SOL - Strathmore Law School</option>
+                                                <option value="STH">STH - School of Tourism and Hospitality</option>
+                                                <option value="SIMS">SIMS - Strathmore Institute of Mathematical Sciences</option>
+                                                <option value="SIMT">SIMT - Strathmore Institute of Management & Technology</option>
+                                                <option value="CRTS">CRTS - Centre for Research in Therapeutic Sciences</option>
                                             </select>
                                         </div>
                                         <div>
@@ -692,12 +981,18 @@ export default function StaffDashboard() {
                                         />
                                     </div>
                                     <div>
-                                        <label style={styles.label}>Google Meet Link (optional)</label>
-                                        <input style={{ ...styles.input, marginBottom: 0 }} 
-                                            placeholder="https://meet.google.com/xxx-xxxx-xxx" 
-                                            value={slotForm.meetingLink} 
-                                            onChange={e => setSlotForm(p => ({ ...p, meetingLink: e.target.value }))} 
-                                        />
+                                        <label style={styles.label}>Meeting Type</label>
+                                        <select style={{ ...styles.input, marginBottom: 0 }} 
+                                            value={slotForm.meetingType || 'physical'} 
+                                            onChange={e => setSlotForm(p => ({ ...p, meetingType: e.target.value }))}>
+                                            <option value="physical">Physical</option>
+                                            <option value="online">Online (Google Meet auto-generated)</option>
+                                        </select>
+                                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                                            {slotForm.meetingType === 'online' 
+                                                ? '🔗 A Google Meet link will be auto-generated when you save' 
+                                                : '📍 Students will meet you at the physical location'}
+                                        </div>
                                     </div>
                                 </div>
                                 <div style={{ marginTop: 10 }}>
@@ -727,12 +1022,12 @@ export default function StaffDashboard() {
                                         </div>
                                         {hasPhysical && (
                                             <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>
-                                                📍 Physical: {slot.location.split('|')[0]?.trim() || slot.location}
+                                                Physical: {slot.location.split('|')[0]?.trim() || slot.location}
                                             </div>
                                         )}
                                         {hasOnline && (
                                             <div style={{ fontSize: 12, color: '#10b981', marginTop: 2 }}>
-                                                💻 Online: {slot.location.includes('Online:') ? slot.location.split('Online:')[1]?.trim() : slot.location}
+                                                Online: {slot.location.includes('Online:') ? slot.location.split('Online:')[1]?.trim() : slot.location}
                                             </div>
                                         )}
                                     </div>
@@ -774,6 +1069,172 @@ export default function StaffDashboard() {
                     </div>
                 )}
             </main>
+
+            {rescheduleModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                }} onClick={() => setRescheduleModalOpen(false)}>
+                    <div style={{
+                        background: '#fff',
+                        borderRadius: 12,
+                        padding: 24,
+                        maxWidth: 420,
+                        width: '90%',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                    }} onClick={e => e.stopPropagation()}>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1a2744', marginBottom: 8 }}>Reschedule Appointment</h2>
+                        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+                            Select a new date and time for this appointment.
+                        </p>
+                        <label style={styles.label}>New Date *</label>
+                        <input
+                            type="date"
+                            style={{ ...styles.input, marginBottom: 12 }}
+                            min={new Date().toISOString().split('T')[0]}
+                            value={rescheduleData.date}
+                            onChange={e => setRescheduleData(p => ({ ...p, date: e.target.value }))}
+                        />
+                        <div style={{ display: 'flex', gap: 10 }}>
+                            <div style={{ flex: 1 }}>
+                                <label style={styles.label}>Start Time *</label>
+                                <input
+                                    type="time"
+                                    style={{ ...styles.input, marginBottom: 12 }}
+                                    value={rescheduleData.startTime}
+                                    onChange={e => setRescheduleData(p => ({ ...p, startTime: e.target.value }))}
+                                />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label style={styles.label}>End Time *</label>
+                                <input
+                                    type="time"
+                                    style={{ ...styles.input, marginBottom: 12 }}
+                                    value={rescheduleData.endTime}
+                                    onChange={e => setRescheduleData(p => ({ ...p, endTime: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <label style={styles.label}>Reason (optional)</label>
+                        <input
+                            type="text"
+                            style={{ ...styles.input, marginBottom: 16 }}
+                            placeholder="Why are you rescheduling?"
+                            value={rescheduleData.reason}
+                            onChange={e => setRescheduleData(p => ({ ...p, reason: e.target.value }))}
+                        />
+                        {error && <div style={styles.alert('error')}>{error}</div>}
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => {
+                                    setRescheduleModalOpen(false);
+                                    setRescheduleData({ date: '', startTime: '', endTime: '', reason: '' });
+                                    setError('');
+                                }}
+                                style={styles.btnOutline}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleRescheduleConfirm}
+                                style={styles.btn()}
+                                disabled={rescheduleLoading || !rescheduleData.date || !rescheduleData.startTime || !rescheduleData.endTime}
+                            >
+                                {rescheduleLoading ? 'Saving...' : 'Confirm Reschedule'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {attendanceModalOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                }} onClick={() => setAttendanceModalOpen(false)}>
+                    <div style={{
+                        background: '#fff',
+                        borderRadius: 12,
+                        padding: 24,
+                        maxWidth: 420,
+                        width: '90%',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                    }} onClick={e => e.stopPropagation()}>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1a2744', marginBottom: 8 }}>Mark Attendance</h2>
+                        <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+                            Was the student present or absent for this appointment?
+                        </p>
+                        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                            <button
+                                onClick={() => setAttendanceStatus('attended')}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px',
+                                    borderRadius: 8,
+                                    border: attendanceStatus === 'attended' ? '2px solid #10b981' : '1px solid #e2e8f0',
+                                    background: attendanceStatus === 'attended' ? '#ecfdf5' : '#fff',
+                                    cursor: 'pointer',
+                                    fontWeight: attendanceStatus === 'attended' ? 700 : 400,
+                                    color: attendanceStatus === 'attended' ? '#10b981' : '#475569'
+                                }}
+                            >
+                                Attended
+                            </button>
+                            <button
+                                onClick={() => setAttendanceStatus('missed')}
+                                style={{
+                                    flex: 1,
+                                    padding: '10px',
+                                    borderRadius: 8,
+                                    border: attendanceStatus === 'missed' ? '2px solid #dc2626' : '1px solid #e2e8f0',
+                                    background: attendanceStatus === 'missed' ? '#fef2f2' : '#fff',
+                                    cursor: 'pointer',
+                                    fontWeight: attendanceStatus === 'missed' ? 700 : 400,
+                                    color: attendanceStatus === 'missed' ? '#dc2626' : '#475569'
+                                }}
+                            >
+                                Missed
+                            </button>
+                        </div>
+                        {error && <div style={styles.alert('error')}>{error}</div>}
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => {
+                                    setAttendanceModalOpen(false);
+                                    setAttendanceStatus('');
+                                    setError('');
+                                }}
+                                style={styles.btnOutline}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAttendanceConfirm}
+                                style={styles.btn()}
+                                disabled={loading || !attendanceStatus}
+                            >
+                                {loading ? 'Saving...' : 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <button 
                 style={styles.fab}

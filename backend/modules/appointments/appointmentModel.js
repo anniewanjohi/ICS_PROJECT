@@ -1,4 +1,4 @@
-// modules/appointments/appointmentModel.js
+// modules/appointments/appointmentModel.js - FIXED
 const { getPool, sql } = require('../../config/database');
 
 function formatTimeField(value) {
@@ -37,10 +37,9 @@ const AppointmentModel = {
         }));
     },
 
-    // NEW: Get slots for a specific date
     getSlotsForDate: async (staffId, date) => {
         const pool = getPool();
-        const dayOfWeek = new Date(date).getDay(); // 0=Sunday, 1=Monday, etc.
+        const dayOfWeek = new Date(date).getDay();
         
         const result = await pool.request()
             .input('staff_id', sql.Int, staffId)
@@ -100,10 +99,10 @@ const AppointmentModel = {
             .input('meeting_link', sql.VarChar, data.meetingLink || null)
             .query(`
                 INSERT INTO appointments 
-                    (student_id, staff_id, slot_id, appointment_date, start_time, end_time, purpose, additional_notes, meeting_location, meeting_link, status, created_at, updated_at)
+                    (student_id, staff_id, slot_id, appointment_date, start_time, end_time, purpose, additional_notes, meeting_location, meeting_link, status, meeting_status, created_at, updated_at)
                 OUTPUT INSERTED.*
                 VALUES 
-                    (@student_id, @staff_id, @slot_id, @appointment_date, @start_time, @end_time, @purpose, @additional_notes, @meeting_location, @meeting_link, 'pending', GETDATE(), GETDATE())
+                    (@student_id, @staff_id, @slot_id, @appointment_date, @start_time, @end_time, @purpose, @additional_notes, @meeting_location, @meeting_link, 'pending', 'pending', GETDATE(), GETDATE())
             `);
         const appointment = result.recordset[0];
         appointment.start_time = formatTimeField(appointment.start_time);
@@ -128,6 +127,7 @@ const AppointmentModel = {
         return result.recordset[0].count > 0;
     },
 
+    // FIXED: Added meeting_status to SELECT
     getStudentAppointments: async (studentId, status = '') => {
         const pool = getPool();
         const request = pool.request().input('student_id', sql.Int, studentId);
@@ -146,9 +146,12 @@ const AppointmentModel = {
                 a.purpose,
                 a.additional_notes,
                 a.status,
+                a.meeting_status,
+                a.attended_at,
                 a.meeting_location,
                 a.meeting_link,
                 a.created_at,
+                a.cancellation_reason,
                 sp.first_name AS staff_first_name,
                 sp.last_name AS staff_last_name,
                 sp.title AS staff_title,
@@ -169,6 +172,7 @@ const AppointmentModel = {
         }));
     },
 
+    // FIXED: Added meeting_status to SELECT
     getStaffAppointments: async (staffId, status = '') => {
         const pool = getPool();
         const request = pool.request().input('staff_id', sql.Int, staffId);
@@ -187,9 +191,12 @@ const AppointmentModel = {
                 a.purpose,
                 a.additional_notes,
                 a.status,
+                a.meeting_status,
+                a.attended_at,
                 a.meeting_location,
                 a.meeting_link,
                 a.created_at,
+                a.cancellation_reason,
                 s.first_name AS student_first_name,
                 s.last_name AS student_last_name,
                 s.student_reg_no,
@@ -207,6 +214,7 @@ const AppointmentModel = {
         }));
     },
 
+    // FIXED: Added meeting_status to SELECT
     findById: async (appointmentId) => {
         const pool = getPool();
         const result = await pool.request()
@@ -260,7 +268,28 @@ const AppointmentModel = {
         return row;
     },
 
-    // NEW: Reschedule appointment
+    updateMeetingStatus: async (appointmentId, meetingStatus) => {
+        const pool = getPool();
+        const result = await pool.request()
+            .input('appointment_id', sql.Int, appointmentId)
+            .input('meeting_status', sql.VarChar, meetingStatus)
+            .input('attended_at', sql.DateTime, new Date())
+            .query(`
+                UPDATE appointments 
+                SET meeting_status = @meeting_status, 
+                    attended_at = @attended_at,
+                    updated_at = GETDATE()
+                OUTPUT INSERTED.*
+                WHERE appointment_id = @appointment_id
+            `);
+        const row = result.recordset[0];
+        if (row) {
+            row.start_time = formatTimeField(row.start_time);
+            row.end_time = formatTimeField(row.end_time);
+        }
+        return row;
+    },
+
     reschedule: async (appointmentId, data) => {
         const pool = getPool();
         const result = await pool.request()
@@ -278,6 +307,7 @@ const AppointmentModel = {
                     reschedule_reason = @reschedule_reason,
                     rescheduled_at = GETDATE(),
                     status = 'pending',
+                    meeting_status = 'pending',
                     updated_at = GETDATE()
                 OUTPUT INSERTED.*
                 WHERE appointment_id = @appointment_id

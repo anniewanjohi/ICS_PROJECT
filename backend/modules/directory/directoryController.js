@@ -5,26 +5,27 @@ class DirectoryController {
 
     static async search(req, res) {
         try {
-            const { query, staffType, departmentId, page = 1, limit = 12 } = req.query;
+            const { query, staffType, departmentId, faculty, page = 1, limit = 12 } = req.query;
 
-            console.log('🔍 Directory search request:', { query, staffType, departmentId, page, limit });
+            console.log('Directory search request:', { query, staffType, departmentId, faculty, page, limit });
 
             const results = await DirectoryModel.search({
                 query: query || '',
                 staffType: staffType || '',
                 departmentId: departmentId || '',
+                faculty: faculty || '',
                 page: parseInt(page),
                 limit: parseInt(limit)
             });
 
-            console.log(`✅ Returning ${results.staff?.length || 0} results`);
+            console.log(`Returning ${results.staff?.length || 0} results`);
 
             return res.status(200).json({ 
                 success: true, 
                 data: results 
             });
         } catch (error) {
-            console.error('❌ Directory search error:', error);
+            console.error('Directory search error:', error);
             return res.status(500).json({ 
                 success: false, 
                 message: 'Error fetching directory',
@@ -58,6 +59,16 @@ class DirectoryController {
         } catch (error) {
             console.error('Get departments error:', error);
             return res.status(500).json({ success: false, message: 'Error fetching departments' });
+        }
+    }
+
+    static async getFaculties(req, res) {
+        try {
+            const faculties = await DirectoryModel.getFaculties();
+            return res.status(200).json({ success: true, data: { faculties } });
+        } catch (error) {
+            console.error('Get faculties error:', error);
+            return res.status(500).json({ success: false, message: 'Error fetching faculties' });
         }
     }
 

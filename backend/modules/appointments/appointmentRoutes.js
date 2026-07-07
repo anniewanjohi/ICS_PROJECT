@@ -9,8 +9,6 @@ router.use(AuthMiddleware.protect);
 
 // Get available slots for a staff member
 router.get('/slots/:staffId', AppointmentController.getSlots);
-
-// Get slots for a specific date
 router.get('/slots/:staffId/:date', AppointmentController.getSlotsByDate);
 
 // Book an appointment (students only)
@@ -27,5 +25,8 @@ router.patch('/:id/cancel', AuthMiddleware.restrictTo('student'), AppointmentCon
 
 // Reschedule appointment (both student and staff)
 router.patch('/:id/reschedule', AuthMiddleware.protect, AppointmentController.reschedule);
+
+// Staff marks attendance
+router.patch('/:id/attendance', AuthMiddleware.restrictTo('staff'), AppointmentController.markAttendance);
 
 module.exports = router;

@@ -28,6 +28,7 @@ const appointmentRoutes = require('./modules/appointments/appointmentRoutes');
 const notificationRoutes = require('./modules/notifications/notificationRoutes');
 const staffRoutes = require('./modules/staff/staffRoutes');
 const adminRoutes = require('./modules/admin/adminRoutes');
+const calendarRoutes = require('./modules/calendar/calendarRoutes');  // <-- ADD THIS
 
 const API = process.env.API_VERSION || '/api/v1';
 
@@ -37,6 +38,7 @@ app.use(`${API}/appointments`, appointmentRoutes);
 app.use(`${API}/notifications`, notificationRoutes);
 app.use(`${API}/staff`, staffRoutes);
 app.use(`${API}/admin`, adminRoutes);
+app.use(`${API}/calendar`, calendarRoutes);  // <-- ADD THIS
 
 // 404
 app.use((req, res) => {

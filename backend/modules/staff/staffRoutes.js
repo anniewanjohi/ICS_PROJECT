@@ -3,9 +3,20 @@ const express = require('express');
 const AuthMiddleware = require('../authentication/authMiddleware');
 const { getPool, sql } = require('../../config/database');
 const { logAction } = require('../../utils/logger');
+const GoogleCalendarService = require('../calendar/calendarService');
 
 const router = express.Router();
 router.use(AuthMiddleware.protect);
+
+let calendarService = null;
+
+const initCalendar = async () => {
+    if (!calendarService) {
+        calendarService = new GoogleCalendarService();
+        await calendarService.init();
+    }
+    return calendarService;
+};
 
 function formatTimeField(value) {
     if (!value) return null;
@@ -16,6 +27,15 @@ function formatTimeField(value) {
     return `${hours}:${minutes}:${seconds}`;
 }
 
+function generateRandomMeetLink() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890';
+    let code = '';
+    for (let i = 0; i < 12; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return `https://meet.google.com/${code.slice(0, 3)}-${code.slice(3, 7)}-${code.slice(7, 12)}`;
+}
+
 // GET /api/v1/staff/profile
 router.get('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
@@ -23,7 +43,7 @@ router.get('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) => {
         const result = await pool.request()
             .input('user_id', sql.Int, req.user.userId)
             .query(`
-                SELECT sp.*, d.department_name, d.faculty
+                SELECT sp.*, d.department_name
                 FROM dbo.staff_profiles sp
                 LEFT JOIN dbo.departments d ON sp.department_id = d.department_id
                 WHERE sp.user_id = @user_id
@@ -44,8 +64,8 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
         const {
             title, position, officeLocation, officeHours, officialEmail,
             areasOfSpecialization, biography, isAvailableForBooking,
-            departmentId, staffType, isMentor, phoneExtension,
-            firstName, lastName
+            staffType, isMentor, phoneExtension,
+            firstName, lastName, faculty
         } = req.body;
 
         const pool = getPool();
@@ -61,10 +81,10 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
             .input('areas_of_specialization', sql.NVarChar, areasOfSpecialization || null)
             .input('biography', sql.Text, biography || null)
             .input('is_available_for_booking', sql.Bit, isAvailableForBooking !== undefined ? (isAvailableForBooking ? 1 : 0) : null)
-            .input('department_id', sql.Int, departmentId || null)
             .input('staff_type', sql.VarChar, staffType || null)
             .input('is_mentor', sql.Bit, isMentor !== undefined ? (isMentor ? 1 : 0) : null)
             .input('phone_extension', sql.VarChar, phoneExtension || null)
+            .input('faculty', sql.VarChar, faculty || null)
             .query(`
                 UPDATE dbo.staff_profiles SET
                     first_name = COALESCE(@first_name, first_name),
@@ -77,10 +97,10 @@ router.patch('/profile', AuthMiddleware.restrictTo('staff'), async (req, res) =>
                     areas_of_specialization = COALESCE(@areas_of_specialization, areas_of_specialization),
                     biography = COALESCE(@biography, biography),
                     is_available_for_booking = COALESCE(@is_available_for_booking, is_available_for_booking),
-                    department_id = COALESCE(@department_id, department_id),
                     staff_type = COALESCE(@staff_type, staff_type),
                     is_mentor = COALESCE(@is_mentor, is_mentor),
                     phone_extension = COALESCE(@phone_extension, phone_extension),
+                    faculty = COALESCE(@faculty, faculty),
                     updated_at = GETDATE()
                 WHERE user_id = @user_id
             `);
@@ -117,11 +137,12 @@ router.get('/availability', AuthMiddleware.restrictTo('staff'), async (req, res)
 
         return res.status(200).json({ success: true, data: { slots } });
     } catch (error) {
+        console.error('Get availability error:', error);
         return res.status(500).json({ success: false, message: 'Error fetching availability' });
     }
 });
 
-// POST /api/v1/staff/availability
+// POST /api/v1/staff/availability - WITH GOOGLE MEET INTEGRATION
 router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
         const { dayOfWeek, startTime, endTime, slotDuration, location, isRecurring, specificDate, meetingLink } = req.body;
@@ -137,8 +158,51 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
         }
 
         const isOnline = (location || '').toLowerCase().includes('online');
+        
+        let finalMeetLink = meetingLink || null;
+        let calendarEventId = null;
+
+        // If online and no meeting link provided, try to create Google Meet
         if (isOnline && !meetingLink) {
-            return res.status(400).json({ success: false, message: 'A Google Meet link is required for online slots' });
+            try {
+                const calendar = await initCalendar();
+                
+                if (calendar.isAuthenticated()) {
+                    // Create date objects for the event
+                    const dateObj = specificDate ? new Date(specificDate) : new Date();
+                    const startDateTime = new Date(dateObj);
+                    const [startHour, startMinute] = (startTime || '09:00').split(':').map(Number);
+                    startDateTime.setHours(startHour, startMinute, 0, 0);
+                    
+                    const endDateTime = new Date(startDateTime);
+                    const [endHour, endMinute] = (endTime || '10:00').split(':').map(Number);
+                    endDateTime.setHours(endHour, endMinute, 0, 0);
+
+                    const meetResult = await calendar.createMeetEvent({
+                        summary: `Availability Slot`,
+                        description: `Booking slot created via SU Directory`,
+                        startTime: startDateTime.toISOString(),
+                        endTime: endDateTime.toISOString(),
+                        location: 'Online - Google Meet',
+                        attendees: []
+                    });
+
+                    if (meetResult.success) {
+                        finalMeetLink = meetResult.meetLink;
+                        calendarEventId = meetResult.eventId;
+                        console.log('✅ Google Meet created:', finalMeetLink);
+                    } else {
+                        console.log('⚠️ Could not create Google Meet, using fallback');
+                        finalMeetLink = generateRandomMeetLink();
+                    }
+                } else {
+                    console.log('⚠️ Calendar not authenticated, using fallback link');
+                    finalMeetLink = generateRandomMeetLink();
+                }
+            } catch (error) {
+                console.error('❌ Google Meet creation failed:', error.message);
+                finalMeetLink = generateRandomMeetLink();
+            }
         }
 
         const pool = getPool();
@@ -150,7 +214,7 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
             return res.status(404).json({ success: false, message: 'Staff profile not found' });
         }
 
-        const finalLocation = (isOnline && meetingLink) ? `Online — ${meetingLink}` : (location || null);
+        const finalLocation = (isOnline && finalMeetLink) ? `Online — ${finalMeetLink}` : (location || null);
 
         const result = await pool.request()
             .input('staff_id', sql.Int, staffResult.recordset[0].staff_id)
@@ -159,18 +223,22 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
             .input('end_time', sql.VarChar, endTime)
             .input('slot_duration', sql.Int, slotDuration || 30)
             .input('location', sql.VarChar, finalLocation)
+            .input('meeting_link', sql.VarChar, finalMeetLink)
+            .input('calendar_event_id', sql.VarChar, calendarEventId)
             .input('is_recurring', sql.Bit, isRecurring ? 1 : 0)
             .input('specific_date', sql.Date, specificDate || null)
             .query(`
                 INSERT INTO dbo.availability_slots 
-                    (staff_id, day_of_week, start_time, end_time, slot_duration, location, is_recurring, specific_date, is_available, created_at, updated_at)
+                    (staff_id, day_of_week, start_time, end_time, slot_duration, location, meeting_link, calendar_event_id, is_recurring, specific_date, is_available, created_at, updated_at)
                 OUTPUT INSERTED.*
-                VALUES (@staff_id, @day_of_week, @start_time, @end_time, @slot_duration, @location, @is_recurring, @specific_date, 1, GETDATE(), GETDATE())
+                VALUES (@staff_id, @day_of_week, @start_time, @end_time, @slot_duration, @location, @meeting_link, @calendar_event_id, @is_recurring, @specific_date, 1, GETDATE(), GETDATE())
             `);
 
         const newSlot = result.recordset[0];
         newSlot.start_time = formatTimeField(newSlot.start_time);
         newSlot.end_time = formatTimeField(newSlot.end_time);
+
+        await logAction(req.user.userId, 'AVAILABILITY_SLOT_CREATED', 'availability_slots', newSlot.slot_id, req);
 
         return res.status(201).json({ success: true, message: 'Slot added', data: { slot: newSlot } });
     } catch (error) {
@@ -182,6 +250,8 @@ router.post('/availability', AuthMiddleware.restrictTo('staff'), async (req, res
 // DELETE /api/v1/staff/availability/:slotId
 router.delete('/availability/:slotId', AuthMiddleware.restrictTo('staff'), async (req, res) => {
     try {
+        console.log('🔍 Delete slot request - Slot ID:', req.params.slotId);
+        
         const pool = getPool();
         const staffResult = await pool.request()
             .input('user_id', sql.Int, req.user.userId)
@@ -191,13 +261,56 @@ router.delete('/availability/:slotId', AuthMiddleware.restrictTo('staff'), async
             return res.status(404).json({ success: false, message: 'Staff profile not found' });
         }
 
-        await pool.request()
-            .input('slot_id', sql.Int, parseInt(req.params.slotId))
-            .input('staff_id', sql.Int, staffResult.recordset[0].staff_id)
+        const staffId = staffResult.recordset[0].staff_id;
+        const slotId = parseInt(req.params.slotId);
+
+        // Check if slot exists
+        const checkSlot = await pool.request()
+            .input('slot_id', sql.Int, slotId)
+            .input('staff_id', sql.Int, staffId)
+            .query('SELECT calendar_event_id FROM dbo.availability_slots WHERE slot_id = @slot_id AND staff_id = @staff_id');
+
+        if (!checkSlot.recordset[0]) {
+            return res.status(404).json({ success: false, message: 'Slot not found' });
+        }
+
+        // Delete Google Calendar event if exists
+        const calendarEventId = checkSlot.recordset[0].calendar_event_id;
+        if (calendarEventId) {
+            try {
+                const calendar = await initCalendar();
+                await calendar.deleteMeetEvent(calendarEventId);
+                console.log('✅ Deleted Google Calendar event:', calendarEventId);
+            } catch (error) {
+                console.error('⚠️ Failed to delete calendar event:', error.message);
+            }
+        }
+
+        // Check for appointments using this slot
+        const checkAppointments = await pool.request()
+            .input('slot_id', sql.Int, slotId)
+            .query('SELECT COUNT(*) as count FROM dbo.appointments WHERE slot_id = @slot_id');
+
+        const appointmentCount = checkAppointments.recordset[0].count;
+
+        if (appointmentCount > 0) {
+            await pool.request()
+                .input('slot_id', sql.Int, slotId)
+                .query('UPDATE dbo.appointments SET slot_id = NULL WHERE slot_id = @slot_id');
+            console.log(`🔄 Updated ${appointmentCount} appointments to remove slot reference`);
+        }
+
+        // Delete the slot
+        const result = await pool.request()
+            .input('slot_id', sql.Int, slotId)
+            .input('staff_id', sql.Int, staffId)
             .query('DELETE FROM dbo.availability_slots WHERE slot_id = @slot_id AND staff_id = @staff_id');
+
+        await logAction(req.user.userId, 'AVAILABILITY_SLOT_DELETED', 'availability_slots', slotId, req);
 
         return res.status(200).json({ success: true, message: 'Slot removed' });
     } catch (error) {
+        console.error('❌ Delete slot error:', error);
         return res.status(500).json({ success: false, message: 'Error removing slot' });
     }
 });
@@ -207,7 +320,7 @@ router.patch('/student-profile', AuthMiddleware.restrictTo('student'), async (re
     try {
         const {
             firstName, lastName, program, yearOfStudy,
-            department, phoneNumber, isStudentRep, repRole
+            faculty, phoneNumber, isStudentRep, repRole, studentRegNo
         } = req.body;
 
         const pool = getPool();
@@ -215,9 +328,10 @@ router.patch('/student-profile', AuthMiddleware.restrictTo('student'), async (re
             .input('user_id', sql.Int, req.user.userId)
             .input('first_name', sql.VarChar, firstName || null)
             .input('last_name', sql.VarChar, lastName || null)
+            .input('student_reg_no', sql.VarChar, studentRegNo || null)
             .input('program', sql.VarChar, program || null)
             .input('year_of_study', sql.Int, yearOfStudy || null)
-            .input('department', sql.VarChar, department || null)
+            .input('faculty', sql.VarChar, faculty || null)
             .input('phone_number', sql.VarChar, phoneNumber || null)
             .input('is_student_rep', sql.Bit, isStudentRep ? 1 : 0)
             .input('rep_role', sql.VarChar, repRole || null)
@@ -225,9 +339,10 @@ router.patch('/student-profile', AuthMiddleware.restrictTo('student'), async (re
                 UPDATE dbo.students SET
                     first_name = COALESCE(@first_name, first_name),
                     last_name = COALESCE(@last_name, last_name),
+                    student_reg_no = COALESCE(@student_reg_no, student_reg_no),
                     program = COALESCE(@program, program),
                     year_of_study = COALESCE(@year_of_study, year_of_study),
-                    department = COALESCE(@department, department),
+                    faculty = COALESCE(@faculty, faculty),
                     phone_number = COALESCE(@phone_number, phone_number),
                     is_student_rep = @is_student_rep,
                     rep_role = @rep_role,

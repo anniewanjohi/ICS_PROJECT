@@ -28,7 +28,7 @@ router.get('/my-profile', async (req, res) => {
     }
 });
 
-// POST /api/v1/admin/change-password - Separate endpoint for password change
+// POST /api/v1/admin/change-password
 router.post('/change-password', async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
@@ -96,27 +96,42 @@ router.get('/stats', async (req, res) => {
 // GET /api/v1/admin/users
 router.get('/users', async (req, res) => {
     try {
-        const { role, search, page = 1, limit = 20 } = req.query;
+        const { role, search, faculty, page = 1, limit = 20 } = req.query;
         const offset = (parseInt(page) - 1) * parseInt(limit);
         const pool = getPool();
-        const request = pool.request()
-            .input('limit', sql.Int, parseInt(limit))
-            .input('offset', sql.Int, offset);
+        
+        let whereConditions = [];
+        
+        if (role) {
+            whereConditions.push("u.role = @role");
+        }
+        if (search) {
+            whereConditions.push("(u.email LIKE @search OR s.first_name LIKE @search OR s.last_name LIKE @search OR sp.first_name LIKE @search OR sp.last_name LIKE @search)");
+        }
+        if (faculty) {
+            whereConditions.push("(s.faculty = @faculty OR sp.faculty = @faculty)");
+        }
 
-        let where = 'WHERE 1=1';
-        if (role) { where += ' AND u.role = @role'; request.input('role', sql.VarChar, role); }
-        if (search) { where += ' AND u.email LIKE @search'; request.input('search', sql.VarChar, `%${search}%`); }
+        const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
+
+        const request = pool.request();
+        if (role) request.input('role', sql.VarChar, role);
+        if (search) request.input('search', sql.VarChar, `%${search}%`);
+        if (faculty) request.input('faculty', sql.VarChar, faculty);
+        request.input('limit', sql.Int, parseInt(limit));
+        request.input('offset', sql.Int, offset);
 
         const result = await request.query(`
             SELECT 
                 u.user_id, u.email, u.role, u.is_active, u.created_at, u.last_login,
                 COALESCE(s.first_name + ' ' + s.last_name, sp.first_name + ' ' + sp.last_name) AS full_name,
                 s.student_reg_no, s.is_student_rep, s.rep_role,
-                sp.staff_number, sp.staff_type, sp.title, sp.is_mentor
+                sp.staff_number, sp.staff_type, sp.title, sp.is_mentor,
+                COALESCE(s.faculty, sp.faculty) AS faculty
             FROM dbo.users u
             LEFT JOIN dbo.students s ON u.user_id = s.user_id
             LEFT JOIN dbo.staff_profiles sp ON u.user_id = sp.user_id
-            ${where}
+            ${whereClause}
             ORDER BY u.created_at DESC
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
         `);
@@ -124,8 +139,14 @@ router.get('/users', async (req, res) => {
         const countRequest = pool.request();
         if (role) countRequest.input('role', sql.VarChar, role);
         if (search) countRequest.input('search', sql.VarChar, `%${search}%`);
+        if (faculty) countRequest.input('faculty', sql.VarChar, faculty);
+        
         const countResult = await countRequest.query(`
-            SELECT COUNT(*) AS total FROM dbo.users u ${where}
+            SELECT COUNT(*) AS total 
+            FROM dbo.users u
+            LEFT JOIN dbo.students s ON u.user_id = s.user_id
+            LEFT JOIN dbo.staff_profiles sp ON u.user_id = sp.user_id
+            ${whereClause}
         `);
 
         return res.status(200).json({
@@ -155,6 +176,7 @@ router.patch('/users/:id/status', async (req, res) => {
         await logAction(req.user.userId, isActive ? 'USER_ACTIVATED' : 'USER_SUSPENDED', 'users', parseInt(req.params.id), req);
         return res.status(200).json({ success: true, message: `User ${isActive ? 'activated' : 'suspended'}` });
     } catch (error) {
+        console.error('Update user status error:', error);
         return res.status(500).json({ success: false, message: 'Error updating user status' });
     }
 });
@@ -174,6 +196,7 @@ router.patch('/users/:id/role', async (req, res) => {
         await logAction(req.user.userId, 'USER_ROLE_CHANGED', 'users', parseInt(req.params.id), req);
         return res.status(200).json({ success: true, message: 'Role updated' });
     } catch (error) {
+        console.error('Update role error:', error);
         return res.status(500).json({ success: false, message: 'Error updating role' });
     }
 });
@@ -201,7 +224,7 @@ router.delete('/users/:id', async (req, res) => {
             .query('DELETE FROM dbo.users WHERE user_id = @user_id');
 
         await logAction(req.user.userId, 'USER_DELETED', 'users', userId, req);
-        return res.status(200).json({ success: true, message: `User deleted successfully` });
+        return res.status(200).json({ success: true, message: 'User deleted successfully' });
     } catch (error) {
         console.error('Delete user error:', error);
         return res.status(500).json({ success: false, message: 'Error deleting user' });
@@ -211,21 +234,25 @@ router.delete('/users/:id', async (req, res) => {
 // POST /api/v1/admin/users
 router.post('/users', async (req, res) => {
     try {
-        const { email, password, role } = req.body;
+        const { email, password, role, faculty } = req.body;
         if (!email || !password || !role) {
             return res.status(400).json({ success: false, message: 'email, password, and role are required' });
         }
         if (!email.endsWith('@strathmore.edu')) {
             return res.status(400).json({ success: false, message: 'Must use a @strathmore.edu email' });
         }
+        
         const pool = getPool();
         const existing = await pool.request()
             .input('email', sql.VarChar, email.toLowerCase())
             .query('SELECT user_id FROM dbo.users WHERE email = @email');
+            
         if (existing.recordset[0]) {
             return res.status(409).json({ success: false, message: 'Email already exists' });
         }
+        
         const passwordHash = await PasswordUtils.hashPassword(password);
+        
         const result = await pool.request()
             .input('email', sql.VarChar, email.toLowerCase())
             .input('password_hash', sql.VarChar, passwordHash)
@@ -235,6 +262,35 @@ router.post('/users', async (req, res) => {
                 OUTPUT INSERTED.user_id, INSERTED.email, INSERTED.role
                 VALUES (@email, @password_hash, @role, 1, GETDATE(), GETDATE())
             `);
+        
+        const userId = result.recordset[0].user_id;
+        
+        if (role === 'student') {
+            await pool.request()
+                .input('user_id', sql.Int, userId)
+                .input('first_name', sql.VarChar, email.split('@')[0].split('.')[0] || 'User')
+                .input('last_name', sql.VarChar, email.split('@')[0].split('.')[1] || '')
+                .input('student_reg_no', sql.VarChar, `STU-${userId}`)
+                .input('program', sql.VarChar, 'Not specified')
+                .input('faculty', sql.VarChar, faculty || null)
+                .query(`
+                    INSERT INTO dbo.students (user_id, first_name, last_name, student_reg_no, program, faculty, created_at, updated_at)
+                    VALUES (@user_id, @first_name, @last_name, @student_reg_no, @program, @faculty, GETDATE(), GETDATE())
+                `);
+        } else if (role === 'staff') {
+            await pool.request()
+                .input('user_id', sql.Int, userId)
+                .input('first_name', sql.VarChar, email.split('@')[0].split('.')[0] || 'User')
+                .input('last_name', sql.VarChar, email.split('@')[0].split('.')[1] || '')
+                .input('staff_number', sql.VarChar, `STAFF-${userId}`)
+                .input('staff_type', sql.VarChar, 'lecturer')
+                .input('faculty', sql.VarChar, faculty || null)
+                .query(`
+                    INSERT INTO dbo.staff_profiles (user_id, first_name, last_name, staff_number, staff_type, faculty, is_available_for_booking, created_at, updated_at)
+                    VALUES (@user_id, @first_name, @last_name, @staff_number, @staff_type, @faculty, 1, GETDATE(), GETDATE())
+                `);
+        }
+
         await logAction(req.user.userId, 'USER_CREATED_BY_ADMIN', 'users', result.recordset[0].user_id, req);
         return res.status(201).json({ success: true, message: 'User created', data: result.recordset[0] });
     } catch (error) {
@@ -261,112 +317,122 @@ router.get('/logs', async (req, res) => {
             `);
         return res.status(200).json({ success: true, data: { logs: result.recordset } });
     } catch (error) {
+        console.error('Get logs error:', error);
         return res.status(500).json({ success: false, message: 'Error fetching logs' });
     }
 });
 
-// GET /api/v1/admin/departments
-router.get('/departments', async (req, res) => {
+// GET /api/v1/admin/faculties
+router.get('/faculties', async (req, res) => {
     try {
         const pool = getPool();
         const result = await pool.request()
-            .query('SELECT * FROM dbo.departments ORDER BY faculty, department_name');
-        return res.status(200).json({ success: true, data: { departments: result.recordset } });
+            .query('SELECT DISTINCT faculty_code, faculty FROM dbo.departments WHERE faculty_code IS NOT NULL ORDER BY faculty ASC');
+        return res.status(200).json({ success: true, data: { faculties: result.recordset } });
     } catch (error) {
-        return res.status(500).json({ success: false, message: 'Error fetching departments' });
+        console.error('Get faculties error:', error);
+        return res.status(500).json({ success: false, message: 'Error fetching faculties' });
     }
 });
 
-// POST /api/v1/admin/departments
-router.post('/departments', async (req, res) => {
+// POST /api/v1/admin/faculties
+router.post('/faculties', async (req, res) => {
     try {
-        const { departmentName, departmentCode, faculty, officeLocation, description } = req.body;
-        if (!departmentName || !departmentCode || !faculty) {
-            return res.status(400).json({ success: false, message: 'departmentName, departmentCode, and faculty are required' });
+        const { facultyCode, facultyName, description } = req.body;
+        if (!facultyCode || !facultyName) {
+            return res.status(400).json({ success: false, message: 'facultyCode and facultyName are required' });
         }
+        
         const pool = getPool();
+        const existing = await pool.request()
+            .input('faculty_code', sql.VarChar, facultyCode.toUpperCase())
+            .query('SELECT faculty_code FROM dbo.departments WHERE faculty_code = @faculty_code');
+        
+        if (existing.recordset[0]) {
+            return res.status(409).json({ success: false, message: 'Faculty code already exists' });
+        }
+        
         const result = await pool.request()
-            .input('department_name', sql.VarChar, departmentName)
-            .input('department_code', sql.VarChar, departmentCode)
-            .input('faculty', sql.VarChar, faculty)
-            .input('office_location', sql.Text, officeLocation || null)
+            .input('faculty_code', sql.VarChar, facultyCode.toUpperCase())
+            .input('faculty_name', sql.VarChar, facultyName)
+            .input('department_name', sql.VarChar, facultyName)
+            .input('department_code', sql.VarChar, facultyCode.toUpperCase())
             .input('description', sql.Text, description || null)
             .query(`
-                INSERT INTO dbo.departments (department_name, department_code, faculty, office_location, description, created_at)
+                INSERT INTO dbo.departments (department_name, department_code, faculty, faculty_code, description, created_at, updated_at)
                 OUTPUT INSERTED.*
-                VALUES (@department_name, @department_code, @faculty, @office_location, @description, GETDATE())
+                VALUES (@department_name, @department_code, @faculty_name, @faculty_code, @description, GETDATE(), GETDATE())
             `);
-        await logAction(req.user.userId, 'DEPARTMENT_CREATED', 'departments', result.recordset[0].department_id, req);
-        return res.status(201).json({ success: true, message: 'Department created', data: result.recordset[0] });
+        
+        await logAction(req.user.userId, 'FACULTY_CREATED', 'departments', result.recordset[0].department_id, req);
+        return res.status(201).json({ success: true, message: 'Faculty created', data: result.recordset[0] });
     } catch (error) {
-        console.error('Create department error:', error);
-        return res.status(500).json({ success: false, message: 'Error creating department' });
+        console.error('Create faculty error:', error);
+        return res.status(500).json({ success: false, message: 'Error creating faculty' });
     }
 });
 
-// PUT /api/v1/admin/departments/:id
-router.put('/departments/:id', async (req, res) => {
+// PUT /api/v1/admin/faculties/:code
+router.put('/faculties/:code', async (req, res) => {
     try {
-        const { id } = req.params;
-        const { departmentName, departmentCode, faculty, officeLocation, description } = req.body;
+        const { code } = req.params;
+        const { facultyName, description } = req.body;
         
         const pool = getPool();
         const result = await pool.request()
-            .input('department_id', sql.Int, parseInt(id))
-            .input('department_name', sql.VarChar, departmentName)
-            .input('department_code', sql.VarChar, departmentCode)
-            .input('faculty', sql.VarChar, faculty)
-            .input('office_location', sql.Text, officeLocation || null)
+            .input('faculty_code', sql.VarChar, code.toUpperCase())
+            .input('faculty_name', sql.VarChar, facultyName)
             .input('description', sql.Text, description || null)
             .query(`
                 UPDATE dbo.departments 
                 SET 
-                    department_name = @department_name,
-                    department_code = @department_code,
-                    faculty = @faculty,
-                    office_location = @office_location,
+                    faculty = @faculty_name,
+                    department_name = @faculty_name,
                     description = @description,
                     updated_at = GETDATE()
                 OUTPUT INSERTED.*
-                WHERE department_id = @department_id
+                WHERE faculty_code = @faculty_code
             `);
         
         if (!result.recordset[0]) {
-            return res.status(404).json({ success: false, message: 'Department not found' });
+            return res.status(404).json({ success: false, message: 'Faculty not found' });
         }
         
-        await logAction(req.user.userId, 'DEPARTMENT_UPDATED', 'departments', parseInt(id), req);
-        return res.status(200).json({ success: true, message: 'Department updated', data: result.recordset[0] });
+        await logAction(req.user.userId, 'FACULTY_UPDATED', 'departments', result.recordset[0].department_id, req);
+        return res.status(200).json({ success: true, message: 'Faculty updated', data: result.recordset[0] });
     } catch (error) {
-        console.error('Update department error:', error);
-        return res.status(500).json({ success: false, message: 'Error updating department' });
+        console.error('Update faculty error:', error);
+        return res.status(500).json({ success: false, message: 'Error updating faculty' });
     }
 });
 
-// DELETE /api/v1/admin/departments/:id
-router.delete('/departments/:id', async (req, res) => {
+// DELETE /api/v1/admin/faculties/:code
+router.delete('/faculties/:code', async (req, res) => {
     try {
-        const { id } = req.params;
+        const { code } = req.params;
         const pool = getPool();
         
-        // Check if department has staff
         const check = await pool.request()
-            .input('department_id', sql.Int, parseInt(id))
-            .query('SELECT COUNT(*) AS count FROM dbo.staff_profiles WHERE department_id = @department_id');
+            .input('faculty_code', sql.VarChar, code.toUpperCase())
+            .query(`
+                SELECT 
+                    (SELECT COUNT(*) FROM dbo.staff_profiles WHERE faculty = @faculty_code) AS staff_count,
+                    (SELECT COUNT(*) FROM dbo.students WHERE faculty = @faculty_code) AS student_count
+            `);
         
-        if (check.recordset[0].count > 0) {
-            return res.status(400).json({ success: false, message: 'Cannot delete department with assigned staff' });
+        if (check.recordset[0].staff_count > 0 || check.recordset[0].student_count > 0) {
+            return res.status(400).json({ success: false, message: 'Cannot delete faculty with assigned staff or students' });
         }
         
         await pool.request()
-            .input('department_id', sql.Int, parseInt(id))
-            .query('DELETE FROM dbo.departments WHERE department_id = @department_id');
+            .input('faculty_code', sql.VarChar, code.toUpperCase())
+            .query('DELETE FROM dbo.departments WHERE faculty_code = @faculty_code');
         
-        await logAction(req.user.userId, 'DEPARTMENT_DELETED', 'departments', parseInt(id), req);
-        return res.status(200).json({ success: true, message: 'Department deleted' });
+        await logAction(req.user.userId, 'FACULTY_DELETED', 'departments', null, req);
+        return res.status(200).json({ success: true, message: 'Faculty deleted' });
     } catch (error) {
-        console.error('Delete department error:', error);
-        return res.status(500).json({ success: false, message: 'Error deleting department' });
+        console.error('Delete faculty error:', error);
+        return res.status(500).json({ success: false, message: 'Error deleting faculty' });
     }
 });
 

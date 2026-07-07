@@ -41,6 +41,7 @@ export const api = {
                     lastName: userData.profileData.last_name || userData.profileData.lastName,
                     studentRegNo: userData.profileData.studentRegNo || '',
                     program: userData.profileData.program || '',
+                    faculty: userData.profileData.faculty || '',
                 } : undefined,
             };
             const res = await fetch(`${API_URL}/auth/register`, {
@@ -89,9 +90,9 @@ export const api = {
     },
 
     // DIRECTORY
-    searchDirectory: async ({ query = '', staffType = '', departmentId = '', page = 1, limit = 12 } = {}) => {
+    searchDirectory: async ({ query = '', staffType = '', faculty = '', page = 1, limit = 12 } = {}) => {
         try {
-            const params = new URLSearchParams({ query, staffType, departmentId, page, limit });
+            const params = new URLSearchParams({ query, staffType, faculty, page, limit });
             const res = await fetch(`${API_URL}/directory/search?${params}`, { headers: authHeaders() });
             return handle(res);
         } catch {
@@ -108,12 +109,12 @@ export const api = {
         }
     },
 
-    getDepartments: async () => {
+    getFaculties: async () => {
         try {
-            const res = await fetch(`${API_URL}/directory/departments`, { headers: authHeaders() });
+            const res = await fetch(`${API_URL}/directory/faculties`, { headers: authHeaders() });
             return handle(res);
         } catch {
-            return { success: false, message: 'Failed to fetch departments' };
+            return { success: false, message: 'Failed to fetch faculties' };
         }
     },
 
@@ -173,6 +174,37 @@ export const api = {
             return handle(res);
         } catch {
             return { success: false, message: 'Failed to cancel appointment' };
+        }
+    },
+
+    rescheduleAppointment: async (appointmentId, data) => {
+        try {
+            const res = await fetch(`${API_URL}/appointments/${appointmentId}/reschedule`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    appointmentDate: data.date,
+                    startTime: data.startTime,
+                    endTime: data.endTime,
+                    reason: data.reason || 'Rescheduled by student'
+                }),
+            });
+            return handle(res);
+        } catch {
+            return { success: false, message: 'Failed to reschedule appointment' };
+        }
+    },
+
+    markAppointmentAttendance: async (appointmentId, meetingStatus) => {
+        try {
+            const res = await fetch(`${API_URL}/appointments/${appointmentId}/attendance`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify({ meetingStatus }),
+            });
+            return handle(res);
+        } catch {
+            return { success: false, message: 'Failed to mark attendance' };
         }
     },
 
@@ -277,9 +309,9 @@ export const api = {
         }
     },
 
-    getAdminUsers: async ({ role = '', search = '', page = 1, limit = 20 } = {}) => {
+    getAdminUsers: async ({ role = '', search = '', faculty = '', page = 1, limit = 20 } = {}) => {
         try {
-            const params = new URLSearchParams({ role, search, page, limit });
+            const params = new URLSearchParams({ role, search, faculty, page, limit });
             const res = await fetch(`${API_URL}/admin/users?${params}`, { headers: authHeaders() });
             return handle(res);
         } catch {
@@ -348,25 +380,50 @@ export const api = {
         }
     },
 
-    getAdminDepartments: async () => {
+    getAdminFaculties: async () => {
         try {
-            const res = await fetch(`${API_URL}/admin/departments`, { headers: authHeaders() });
+            const res = await fetch(`${API_URL}/admin/faculties`, { headers: authHeaders() });
             return handle(res);
         } catch {
-            return { success: false, message: 'Failed to fetch departments' };
+            return { success: false, message: 'Failed to fetch faculties' };
         }
     },
 
-    createDepartment: async (data) => {
+    createFaculty: async (data) => {
         try {
-            const res = await fetch(`${API_URL}/admin/departments`, {
+            const res = await fetch(`${API_URL}/admin/faculties`, {
                 method: 'POST',
                 headers: authHeaders(),
                 body: JSON.stringify(data),
             });
             return handle(res);
         } catch {
-            return { success: false, message: 'Failed to create department' };
+            return { success: false, message: 'Failed to create faculty' };
+        }
+    },
+
+    updateFaculty: async (code, data) => {
+        try {
+            const res = await fetch(`${API_URL}/admin/faculties/${code}`, {
+                method: 'PUT',
+                headers: authHeaders(),
+                body: JSON.stringify(data),
+            });
+            return handle(res);
+        } catch {
+            return { success: false, message: 'Failed to update faculty' };
+        }
+    },
+
+    deleteFaculty: async (code) => {
+        try {
+            const res = await fetch(`${API_URL}/admin/faculties/${code}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            });
+            return handle(res);
+        } catch {
+            return { success: false, message: 'Failed to delete faculty' };
         }
     },
 

@@ -56,8 +56,8 @@ const UserModel = {
                 .input('user_id', sql.Int, userId)
                 .query(`
                     SELECT student_id, first_name, last_name, student_reg_no,
-                           program, year_of_study, department, profile_picture_url,
-                           is_student_rep, rep_role, phone_number
+                           program, year_of_study, faculty,
+                           profile_picture_url, is_student_rep, rep_role, phone_number
                     FROM dbo.students WHERE user_id = @user_id
                 `);
             profile = profileResult.recordset[0] || null;
@@ -71,8 +71,8 @@ const UserModel = {
                            sp.office_location, sp.office_hours, sp.official_email,
                            sp.areas_of_specialization, sp.biography,
                            sp.profile_picture_url, sp.is_available_for_booking,
-                           sp.phone_extension,
-                           d.department_name, d.faculty
+                           sp.phone_extension, sp.faculty,
+                           d.department_name
                     FROM dbo.staff_profiles sp
                     LEFT JOIN dbo.departments d ON sp.department_id = d.department_id
                     WHERE sp.user_id = @user_id
@@ -93,14 +93,14 @@ const UserModel = {
             .input('student_reg_no', sql.VarChar, studentRegNo)
             .input('program', sql.VarChar, data.program || 'Not specified')
             .input('year_of_study', sql.Int, data.yearOfStudy || null)
-            .input('department', sql.VarChar, data.department || null)
+            .input('faculty', sql.VarChar, data.faculty || null)
             .input('is_student_rep', sql.Bit, data.isStudentRep ? 1 : 0)
             .input('rep_role', sql.VarChar, data.repRole || null)
             .query(`
                 INSERT INTO dbo.students 
-                    (user_id, first_name, last_name, student_reg_no, program, year_of_study, department, is_student_rep, rep_role, created_at, updated_at)
+                    (user_id, first_name, last_name, student_reg_no, program, year_of_study, faculty, is_student_rep, rep_role, created_at, updated_at)
                 OUTPUT INSERTED.*
-                VALUES (@user_id, @first_name, @last_name, @student_reg_no, @program, @year_of_study, @department, @is_student_rep, @rep_role, GETDATE(), GETDATE())
+                VALUES (@user_id, @first_name, @last_name, @student_reg_no, @program, @year_of_study, @faculty, @is_student_rep, @rep_role, GETDATE(), GETDATE())
             `);
         return result.recordset[0];
     },
@@ -115,17 +115,17 @@ const UserModel = {
             .input('staff_number', sql.VarChar, staffNumber)
             .input('staff_type', sql.VarChar, data.staffType || 'lecturer')
             .input('is_mentor', sql.Bit, data.isMentor ? 1 : 0)
-            .input('department_id', sql.Int, data.departmentId || null)
+            .input('faculty', sql.VarChar, data.faculty || null)
             .input('title', sql.VarChar, data.title || null)
             .input('position', sql.VarChar, data.position || null)
             .input('office_location', sql.Text, data.officeLocation || null)
             .input('official_email', sql.VarChar, data.officialEmail || null)
             .query(`
                 INSERT INTO dbo.staff_profiles 
-                    (user_id, first_name, last_name, staff_number, staff_type, is_mentor, department_id, title, position, office_location, official_email, is_available_for_booking, created_at, updated_at)
+                    (user_id, first_name, last_name, staff_number, staff_type, is_mentor, title, position, office_location, official_email, faculty, is_available_for_booking, created_at, updated_at)
                 OUTPUT INSERTED.*
                 VALUES 
-                    (@user_id, @first_name, @last_name, @staff_number, @staff_type, @is_mentor, @department_id, @title, @position, @office_location, @official_email, 1, GETDATE(), GETDATE())
+                    (@user_id, @first_name, @last_name, @staff_number, @staff_type, @is_mentor, @title, @position, @office_location, @official_email, @faculty, 1, GETDATE(), GETDATE())
             `);
         return result.recordset[0];
     },
@@ -136,9 +136,10 @@ const UserModel = {
             .input('user_id', sql.Int, userId)
             .input('first_name', sql.VarChar, data.firstName || null)
             .input('last_name', sql.VarChar, data.lastName || null)
+            .input('student_reg_no', sql.VarChar, data.studentRegNo || null)
             .input('program', sql.VarChar, data.program || null)
             .input('year_of_study', sql.Int, data.yearOfStudy || null)
-            .input('department', sql.VarChar, data.department || null)
+            .input('faculty', sql.VarChar, data.faculty || null)
             .input('phone_number', sql.VarChar, data.phoneNumber || null)
             .input('is_student_rep', sql.Bit, data.isStudentRep ? 1 : 0)
             .input('rep_role', sql.VarChar, data.repRole || null)
@@ -146,9 +147,10 @@ const UserModel = {
                 UPDATE dbo.students SET
                     first_name = COALESCE(@first_name, first_name),
                     last_name = COALESCE(@last_name, last_name),
+                    student_reg_no = COALESCE(@student_reg_no, student_reg_no),
                     program = COALESCE(@program, program),
                     year_of_study = COALESCE(@year_of_study, year_of_study),
-                    department = COALESCE(@department, department),
+                    faculty = COALESCE(@faculty, faculty),
                     phone_number = COALESCE(@phone_number, phone_number),
                     is_student_rep = @is_student_rep,
                     rep_role = @rep_role,

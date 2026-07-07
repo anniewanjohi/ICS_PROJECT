@@ -3,9 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
-const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token');
-
 export default function AdminDashboard() {
     const { user, logout } = useAuth();
     const [view, setView] = useState('stats');
@@ -16,40 +13,58 @@ export default function AdminDashboard() {
     const [usersPage, setUsersPage] = useState(1);
     const [userSearch, setUserSearch] = useState('');
     const [userRoleFilter, setUserRoleFilter] = useState('');
-    const [departments, setDepartments] = useState([]);
+    const [facultyFilter, setFacultyFilter] = useState('');
+    const [faculties, setFaculties] = useState([]);
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
     const [error, setError] = useState('');
-    const [newUserForm, setNewUserForm] = useState({ email: '', password: '', role: 'staff' });
-    const [deptForm, setDeptForm] = useState({ departmentName: '', departmentCode: '', faculty: '', officeLocation: '', description: '' });
+    const [newUserForm, setNewUserForm] = useState({ email: '', password: '', role: 'staff', faculty: '' });
     const [showNewUser, setShowNewUser] = useState(false);
-    const [showNewDept, setShowNewDept] = useState(false);
+    const [facultyForm, setFacultyForm] = useState({ facultyCode: '', facultyName: '', description: '' });
+    const [showNewFaculty, setShowNewFaculty] = useState(false);
 
-    // Admin profile state
     const [myAdminProfile, setMyAdminProfile] = useState(null);
     const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
     const [pwMsg, setPwMsg] = useState('');
     const [pwErr, setPwErr] = useState('');
     const [pwSaving, setPwSaving] = useState(false);
 
-    useEffect(() => { loadStats(); }, []);
+    useEffect(() => { 
+        loadStats(); 
+        loadFaculties();
+    }, []);
 
     const loadStats = async () => {
         const res = await api.getAdminStats();
         if (res.success) setStats(res.data);
     };
 
-    const loadUsers = async (p = 1) => {
-        setLoading(true);
-        const res = await api.getAdminUsers({ role: userRoleFilter, search: userSearch, page: p, limit: 20 });
-        if (res.success) { setUsers(res.data.users); setUsersTotal(res.data.total); setUsersTotalPages(res.data.totalPages); setUsersPage(p); }
-        setLoading(false);
+    const loadFaculties = async () => {
+        const res = await api.getAdminFaculties();
+        if (res.success) setFaculties(res.data.faculties);
     };
 
-    const loadDepartments = async () => {
-        const res = await api.getAdminDepartments();
-        if (res.success) setDepartments(res.data.departments);
+    const loadUsers = async (p = 1, facultyVal = null) => {
+        setLoading(true);
+        const facultyToUse = facultyVal !== null ? facultyVal : facultyFilter;
+        const res = await api.getAdminUsers({ 
+            role: userRoleFilter, 
+            search: userSearch, 
+            faculty: facultyToUse,
+            page: p, 
+            limit: 20 
+        });
+        if (res.success) { 
+            setUsers(res.data.users); 
+            setUsersTotal(res.data.total); 
+            setUsersTotalPages(res.data.totalPages); 
+            setUsersPage(p); 
+            if (facultyVal !== null) {
+                setFacultyFilter(facultyVal);
+            }
+        }
+        setLoading(false);
     };
 
     const loadLogs = async () => {
@@ -80,12 +95,42 @@ export default function AdminDashboard() {
         setPwSaving(false);
     };
 
+    const handleCreateFaculty = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setMsg('');
+        setError('');
+        const res = await api.createFaculty(facultyForm);
+        if (res.success) {
+            setMsg('Faculty created successfully.');
+            setShowNewFaculty(false);
+            setFacultyForm({ facultyCode: '', facultyName: '', description: '' });
+            loadFaculties();
+        } else {
+            setError(res.message || 'Failed to create faculty.');
+        }
+        setLoading(false);
+    };
+
+    const handleDeleteFaculty = async (code, name) => {
+        if (!window.confirm(`Delete faculty ${name}? This cannot be undone.`)) return;
+        setLoading(true);
+        const res = await api.deleteFaculty(code);
+        if (res.success) {
+            setMsg(`Faculty ${name} deleted.`);
+            loadFaculties();
+        } else {
+            setError(res.message || 'Failed to delete faculty.');
+        }
+        setLoading(false);
+    };
+
     const handleViewChange = (v) => {
         setView(v); setMsg(''); setError('');
         if (v === 'users') loadUsers(1);
-        if (v === 'departments') loadDepartments();
         if (v === 'logs') loadLogs();
         if (v === 'myprofile') loadMyAdminProfile();
+        if (v === 'faculties') loadFaculties();
     };
 
     const handleToggleStatus = async (userId, isActive) => {
@@ -104,20 +149,24 @@ export default function AdminDashboard() {
     const handleCreateUser = async (e) => {
         e.preventDefault(); setLoading(true); setMsg(''); setError('');
         const res = await api.createAdminUser(newUserForm);
-        if (res.success) { setMsg('User created successfully.'); setShowNewUser(false); setNewUserForm({ email: '', password: '', role: 'staff' }); loadUsers(1); }
+        if (res.success) { setMsg('User created successfully.'); setShowNewUser(false); setNewUserForm({ email: '', password: '', role: 'staff', faculty: '' }); loadUsers(1); }
         else setError(res.message || 'Failed to create user.');
         setLoading(false);
     };
 
-    const handleCreateDept = async (e) => {
-        e.preventDefault(); setLoading(true); setMsg(''); setError('');
-        const res = await api.createDepartment(deptForm);
-        if (res.success) { setMsg('Department created.'); setShowNewDept(false); setDeptForm({ departmentName: '', departmentCode: '', faculty: '', officeLocation: '', description: '' }); loadDepartments(); }
-        else setError(res.message || 'Failed to create department.');
-        setLoading(false);
-    };
-
     const roleColor = (r) => ({ student: '#3b82f6', staff: '#10b981', admin: '#8b5cf6' }[r] || '#6b7280');
+
+    const facultyFilterButtons = [
+        { val: '', label: 'All Faculties' },
+        { val: 'SCES', label: 'SCES' },
+        { val: 'SOB', label: 'SOB' },
+        { val: 'SHSS', label: 'SHSS' },
+        { val: 'SOL', label: 'SOL' },
+        { val: 'STH', label: 'STH' },
+        { val: 'SIMS', label: 'SIMS' },
+        { val: 'SIMT', label: 'SIMT' },
+        { val: 'CRTS', label: 'CRTS' },
+    ];
 
     const styles = {
         container: { minHeight: '100vh', background: '#f8fafc', fontFamily: 'Inter, sans-serif' },
@@ -143,7 +192,7 @@ export default function AdminDashboard() {
                 <div style={{ display: 'flex', gap: 4 }}>
                     <button style={styles.navBtn(view === 'stats')} onClick={() => handleViewChange('stats')}>Overview</button>
                     <button style={styles.navBtn(view === 'users')} onClick={() => handleViewChange('users')}>Users</button>
-                    <button style={styles.navBtn(view === 'departments')} onClick={() => handleViewChange('departments')}>Departments</button>
+                    <button style={styles.navBtn(view === 'faculties')} onClick={() => handleViewChange('faculties')}>Faculties</button>
                     <button style={styles.navBtn(view === 'logs')} onClick={() => handleViewChange('logs')}>Audit Logs</button>
                     <button style={styles.navBtn(view === 'myprofile')} onClick={() => handleViewChange('myprofile')}>My Profile</button>
                 </div>
@@ -171,7 +220,6 @@ export default function AdminDashboard() {
                                 { label: 'Pending', value: stats.pending_appointments, color: '#ef4444' },
                                 { label: 'Confirmed', value: stats.confirmed_appointments, color: '#10b981' },
                                 { label: "Today's", value: stats.todays_appointments, color: '#1a2744' },
-                                { label: 'Departments', value: stats.total_departments, color: '#64748b' },
                             ].map((s, i) => (
                                 <div key={i} style={{ ...styles.card, marginBottom: 0, borderLeft: `4px solid ${s.color}` }}>
                                     <div style={{ fontSize: 26, fontWeight: 800, color: s.color, marginBottom: 2 }}>{s.value ?? '—'}</div>
@@ -205,6 +253,17 @@ export default function AdminDashboard() {
                                             </select>
                                         </div>
                                     </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        <div>
+                                            <label style={styles.label}>Faculty</label>
+                                            <select style={styles.input} value={newUserForm.faculty} onChange={e => setNewUserForm(p => ({ ...p, faculty: e.target.value }))}>
+                                                <option value="">Select Faculty...</option>
+                                                {faculties.map(f => (
+                                                    <option key={f.faculty_code} value={f.faculty_code}>{f.faculty_code} - {f.faculty}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
                                     <div style={{ display: 'flex', gap: 10 }}>
                                         <button type="submit" style={styles.btn()} disabled={loading}>{loading ? 'Creating...' : 'Create account'}</button>
                                         <button type="button" style={styles.btnOutline} onClick={() => setShowNewUser(false)}>Cancel</button>
@@ -223,6 +282,28 @@ export default function AdminDashboard() {
                                 </select>
                                 <button style={styles.btn()} onClick={() => loadUsers(1)}>Search</button>
                             </div>
+                            
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                                {facultyFilterButtons.map(({ val, label }) => (
+                                    <button 
+                                        key={val} 
+                                        onClick={() => loadUsers(1, val)}
+                                        style={{ 
+                                            background: facultyFilter === val ? '#1a2744' : '#f1f5f9', 
+                                            color: facultyFilter === val ? '#fff' : '#475569', 
+                                            border: 'none', 
+                                            borderRadius: 20, 
+                                            padding: '5px 14px', 
+                                            fontSize: 12, 
+                                            fontWeight: 600, 
+                                            cursor: 'pointer' 
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            
                             {loading ? (
                                 <div style={{ textAlign: 'center', padding: 30, color: '#64748b' }}>Loading...</div>
                             ) : (
@@ -232,7 +313,7 @@ export default function AdminDashboard() {
                                             <tr>
                                                 <th style={styles.th}>Name / Email</th>
                                                 <th style={styles.th}>Role</th>
-                                                <th style={styles.th}>ID / Reg No</th>
+                                                <th style={styles.th}>Faculty</th>
                                                 <th style={styles.th}>Status</th>
                                                 <th style={styles.th}>Last login</th>
                                                 <th style={styles.th}>Actions</th>
@@ -245,13 +326,13 @@ export default function AdminDashboard() {
                                                         <div style={{ fontWeight: 600, color: '#1a2744', fontSize: 13 }}>{u.full_name || '—'}</div>
                                                         <div style={{ fontSize: 11, color: '#94a3b8' }}>{u.email}</div>
                                                         {u.is_student_rep ? <div style={{ fontSize: 10, color: '#b45309', marginTop: 2 }}>Rep: {u.rep_role}</div> : null}
-                                                        {u.is_mentor ? <div style={{ fontSize: 10, color: '#7c3aed', marginTop: 2 }}>Also mentor</div> : null}
+                                                        {u.is_mentor ? <div style={{ fontSize: 10, color: '#7c3aed', marginTop: 2 }}>Mentor</div> : null}
                                                     </td>
                                                     <td style={styles.td}>
                                                         <span style={styles.badge(roleColor(u.role))}>{u.role}</span>
                                                         {u.staff_type && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{u.staff_type}</div>}
                                                     </td>
-                                                    <td style={styles.td}>{u.student_reg_no || u.staff_number || '—'}</td>
+                                                    <td style={styles.td}>{u.faculty || '—'}</td>
                                                     <td style={styles.td}><span style={styles.badge(u.is_active ? '#10b981' : '#ef4444')}>{u.is_active ? 'Active' : 'Suspended'}</span></td>
                                                     <td style={styles.td}>{u.last_login ? new Date(u.last_login).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'}</td>
                                                     <td style={styles.td}>
@@ -282,41 +363,60 @@ export default function AdminDashboard() {
                     </div>
                 )}
 
-                {/* DEPARTMENTS */}
-                {view === 'departments' && (
+                {/* FACULTIES */}
+                {view === 'faculties' && (
                     <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>Departments</h1>
-                            <button style={styles.btn()} onClick={() => setShowNewDept(!showNewDept)}>+ Add department</button>
+                            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>Faculties</h1>
+                            <button style={styles.btn()} onClick={() => setShowNewFaculty(!showNewFaculty)}>+ Add faculty</button>
                         </div>
-                        {showNewDept && (
+                        {showNewFaculty && (
                             <div style={styles.card}>
-                                <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2744', marginBottom: 14 }}>Add new department</div>
-                                <form onSubmit={handleCreateDept}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                                        <div><label style={styles.label}>Department name *</label><input style={styles.input} value={deptForm.departmentName} onChange={e => setDeptForm(p => ({ ...p, departmentName: e.target.value }))} /></div>
-                                        <div><label style={styles.label}>Code *</label><input style={styles.input} placeholder="e.g. ICS" value={deptForm.departmentCode} onChange={e => setDeptForm(p => ({ ...p, departmentCode: e.target.value }))} /></div>
-                                        <div><label style={styles.label}>Faculty *</label><input style={styles.input} placeholder="e.g. SCES" value={deptForm.faculty} onChange={e => setDeptForm(p => ({ ...p, faculty: e.target.value }))} /></div>
-                                        <div><label style={styles.label}>Office location</label><input style={styles.input} value={deptForm.officeLocation} onChange={e => setDeptForm(p => ({ ...p, officeLocation: e.target.value }))} /></div>
-                                        <div style={{ gridColumn: 'span 2' }}><label style={styles.label}>Description</label><input style={styles.input} value={deptForm.description} onChange={e => setDeptForm(p => ({ ...p, description: e.target.value }))} /></div>
+                                <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2744', marginBottom: 14 }}>Add new faculty</div>
+                                <form onSubmit={handleCreateFaculty}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        <div>
+                                            <label style={styles.label}>Faculty Code *</label>
+                                            <input style={styles.input} placeholder="e.g. SCES" value={facultyForm.facultyCode} onChange={e => setFacultyForm(p => ({ ...p, facultyCode: e.target.value.toUpperCase() }))} />
+                                        </div>
+                                        <div>
+                                            <label style={styles.label}>Faculty Name *</label>
+                                            <input style={styles.input} placeholder="e.g. School of Computing and Engineering Sciences" value={facultyForm.facultyName} onChange={e => setFacultyForm(p => ({ ...p, facultyName: e.target.value }))} />
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: 10 }}>
-                                        <button type="submit" style={styles.btn()} disabled={loading}>{loading ? 'Saving...' : 'Save department'}</button>
-                                        <button type="button" style={styles.btnOutline} onClick={() => setShowNewDept(false)}>Cancel</button>
+                                    <div>
+                                        <label style={styles.label}>Description</label>
+                                        <input style={styles.input} placeholder="Brief description" value={facultyForm.description} onChange={e => setFacultyForm(p => ({ ...p, description: e.target.value }))} />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                                        <button type="submit" style={styles.btn()} disabled={loading}>{loading ? 'Saving...' : 'Add faculty'}</button>
+                                        <button type="button" style={styles.btnOutline} onClick={() => { setShowNewFaculty(false); setFacultyForm({ facultyCode: '', facultyName: '', description: '' }); }}>Cancel</button>
                                     </div>
                                 </form>
                             </div>
                         )}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px,1fr))', gap: 14 }}>
-                            {departments.map(d => (
-                                <div key={d.department_id} style={styles.card}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1a2744', marginBottom: 4 }}>{d.department_name}</div>
-                                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 6 }}>{d.department_code} · {d.faculty}</div>
-                                    {d.office_location && <div style={{ fontSize: 12, color: '#64748b' }}>📍 {d.office_location}</div>}
-                                    {d.description && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{d.description}</div>}
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+                            {faculties.map(f => (
+                                <div key={f.faculty_code} style={styles.card}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 700, fontSize: 18, color: '#1a2744' }}>{f.faculty_code}</div>
+                                            <div style={{ fontSize: 14, color: '#475569' }}>{f.faculty}</div>
+                                        </div>
+                                        <button 
+                                            style={styles.btnSm('#ef4444')} 
+                                            onClick={() => handleDeleteFaculty(f.faculty_code, f.faculty)}
+                                            disabled={loading}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
-                            {departments.length === 0 && <div style={{ ...styles.card, color: '#64748b', textAlign: 'center', padding: 30 }}>No departments yet.</div>}
+                            {faculties.length === 0 && (
+                                <div style={{ ...styles.card, color: '#64748b', textAlign: 'center', padding: 30 }}>No faculties yet. Add one above.</div>
+                            )}
                         </div>
                     </div>
                 )}

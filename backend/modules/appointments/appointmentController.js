@@ -18,7 +18,6 @@ class AppointmentController {
         }
     }
 
-    // NEW: Get slots for a specific date
     static async getSlotsByDate(req, res) {
         try {
             const { staffId, date } = req.params;
@@ -54,7 +53,6 @@ class AppointmentController {
                 return res.status(409).json({ success: false, message: 'This time slot has already been booked. Please select another.' });
             }
 
-            // Extract Google Meet link if the slot's location indicates it is online.
             let extractedMeetingLink = null;
             if (meetingLocation && meetingLocation.startsWith('Online — ')) {
                 extractedMeetingLink = meetingLocation.replace('Online — ', '').trim();
@@ -99,9 +97,23 @@ class AppointmentController {
     static async getMyAppointments(req, res) {
         try {
             const { status } = req.query;
+            const pool = getPool();
+
+            // AUTO-UPDATE: Mark all past appointments as MISSED
+            const updateResult = await pool.request()
+                .query(`
+                    UPDATE dbo.appointments 
+                    SET meeting_status = 'missed', 
+                        attended_at = GETDATE(),
+                        updated_at = GETDATE()
+                    WHERE status IN ('confirmed', 'pending')
+                      AND (meeting_status IS NULL OR meeting_status = 'pending')
+                      AND CAST(appointment_date AS DATETIME) + CAST(start_time AS DATETIME) < GETDATE()
+                `);
+
+            console.log(`✅ Auto-marked ${updateResult.rowsAffected ? updateResult.rowsAffected[0] : 0} past appointments as MISSED`);
 
             if (req.user.role === 'student') {
-                const pool = getPool();
                 const studentResult = await pool.request()
                     .input('user_id', sql.Int, req.user.userId)
                     .query('SELECT student_id FROM students WHERE user_id = @user_id');
@@ -116,7 +128,6 @@ class AppointmentController {
                 return res.status(200).json({ success: true, data: { appointments } });
 
             } else if (req.user.role === 'staff') {
-                const pool = getPool();
                 const staffResult = await pool.request()
                     .input('user_id', sql.Int, req.user.userId)
                     .query('SELECT staff_id FROM staff_profiles WHERE user_id = @user_id');
@@ -192,26 +203,41 @@ class AppointmentController {
             const { id } = req.params;
             const { cancellationReason } = req.body;
 
+            console.log(`🔄 Cancelling appointment ${id} for user ${req.user.userId}`);
+
             const appointment = await AppointmentModel.findById(parseInt(id));
             if (!appointment) {
+                console.log(`❌ Appointment ${id} not found`);
                 return res.status(404).json({ success: false, message: 'Appointment not found' });
             }
+
+            console.log(`📊 Appointment found: status=${appointment.status}, student_id=${appointment.student_id}`);
 
             const pool = getPool();
             const studentResult = await pool.request()
                 .input('user_id', sql.Int, req.user.userId)
                 .query('SELECT student_id FROM students WHERE user_id = @user_id');
 
-            if (!studentResult.recordset[0] || studentResult.recordset[0].student_id !== appointment.student_id) {
+            if (!studentResult.recordset[0]) {
+                console.log(`❌ Student profile not found for user ${req.user.userId}`);
+                return res.status(400).json({ success: false, message: 'Student profile not found' });
+            }
+
+            console.log(`📊 Student ID: ${studentResult.recordset[0].student_id}, Appointment student_id: ${appointment.student_id}`);
+
+            if (studentResult.recordset[0].student_id !== appointment.student_id) {
+                console.log(`❌ Student ${studentResult.recordset[0].student_id} not authorized to cancel appointment ${id}`);
                 return res.status(403).json({ success: false, message: 'You can only cancel your own appointments' });
             }
 
             if (!['pending', 'confirmed'].includes(appointment.status)) {
+                console.log(`❌ Appointment status ${appointment.status} cannot be cancelled`);
                 return res.status(400).json({ success: false, message: 'This appointment cannot be cancelled' });
             }
 
             const canCancel = await AppointmentModel.canStudentCancel(parseInt(id));
             if (!canCancel) {
+                console.log(`❌ Appointment ${id} is within 2 hours, cannot cancel`);
                 return res.status(400).json({ success: false, message: 'Appointments can only be cancelled more than 2 hours before the scheduled time' });
             }
 
@@ -225,17 +251,25 @@ class AppointmentController {
                 type: 'appointment_cancelled'
             });
 
+            await NotificationModel.create({
+                userId: req.user.userId,
+                appointmentId: parseInt(id),
+                title: 'Appointment Cancelled',
+                message: `You successfully cancelled your appointment on ${appointment.appointment_date} at ${appointment.start_time}.`,
+                type: 'appointment_cancelled'
+            });
+
             await logAction(req.user.userId, 'APPOINTMENT_CANCELLED', 'appointments', parseInt(id), req);
 
+            console.log(`✅ Appointment ${id} cancelled successfully`);
             return res.status(200).json({ success: true, message: 'Appointment cancelled successfully' });
 
         } catch (error) {
-            console.error('Cancel appointment error:', error);
-            return res.status(500).json({ success: false, message: 'Error cancelling appointment' });
+            console.error('❌ Cancel appointment error:', error);
+            return res.status(500).json({ success: false, message: 'Error cancelling appointment', error: error.message });
         }
     }
 
-    // NEW: Reschedule appointment
     static async reschedule(req, res) {
         try {
             const { id } = req.params;
@@ -250,7 +284,6 @@ class AppointmentController {
                 return res.status(404).json({ success: false, message: 'Appointment not found' });
             }
 
-            // Check if user is authorized (student or staff)
             const pool = getPool();
             let isAuthorized = false;
 
@@ -274,13 +307,11 @@ class AppointmentController {
                 return res.status(403).json({ success: false, message: 'You are not authorized to reschedule this appointment' });
             }
 
-            // Check if new slot is available
             const taken = await AppointmentModel.isSlotTaken(appointment.staff_id, appointmentDate, startTime);
             if (taken) {
                 return res.status(409).json({ success: false, message: 'This time slot is already booked. Please select another.' });
             }
 
-            // Update appointment
             const updated = await AppointmentModel.reschedule(parseInt(id), {
                 appointmentDate,
                 startTime,
@@ -288,7 +319,6 @@ class AppointmentController {
                 reason: reason || 'Rescheduled by user'
             });
 
-            // Notify both parties
             await NotificationModel.create({
                 userId: appointment.student_user_id,
                 appointmentId: parseInt(id),
@@ -312,6 +342,58 @@ class AppointmentController {
         } catch (error) {
             console.error('Reschedule appointment error:', error);
             return res.status(500).json({ success: false, message: 'Error rescheduling appointment' });
+        }
+    }
+
+    static async markAttendance(req, res) {
+        try {
+            const { id } = req.params;
+            const { meetingStatus } = req.body;
+
+            if (!['attended', 'missed'].includes(meetingStatus)) {
+                return res.status(400).json({ success: false, message: 'meetingStatus must be "attended" or "missed"' });
+            }
+
+            const appointment = await AppointmentModel.findById(parseInt(id));
+            if (!appointment) {
+                return res.status(404).json({ success: false, message: 'Appointment not found' });
+            }
+
+            if (req.user.role !== 'staff') {
+                return res.status(403).json({ success: false, message: 'Only staff can mark attendance' });
+            }
+
+            const pool = getPool();
+            const staffResult = await pool.request()
+                .input('user_id', sql.Int, req.user.userId)
+                .query('SELECT staff_id FROM staff_profiles WHERE user_id = @user_id');
+
+            if (!staffResult.recordset[0] || staffResult.recordset[0].staff_id !== appointment.staff_id) {
+                return res.status(403).json({ success: false, message: 'You can only mark attendance for your own appointments' });
+            }
+
+            if (appointment.status !== 'confirmed') {
+                return res.status(400).json({ success: false, message: 'Only confirmed appointments can be marked for attendance' });
+            }
+
+            const updated = await AppointmentModel.updateMeetingStatus(parseInt(id), meetingStatus);
+
+            const statusText = meetingStatus === 'attended' ? 'attended' : 'missed';
+            await NotificationModel.create({
+                userId: appointment.student_user_id,
+                appointmentId: parseInt(id),
+                title: `Appointment ${statusText === 'attended' ? 'Completed' : 'Missed'}`,
+                message: `Your appointment on ${appointment.appointment_date} at ${appointment.start_time} was marked as ${statusText}.`,
+                type: meetingStatus === 'attended' ? 'appointment_completed' : 'appointment_missed'
+            });
+
+            await logAction(req.user.userId, `APPOINTMENT_${meetingStatus.toUpperCase()}`, 'appointments', parseInt(id), req);
+
+            return res.status(200).json({ success: true, message: `Appointment marked as ${meetingStatus}`, data: { appointment: updated } });
+
+        } catch (error) {
+            console.error('Mark attendance error:', error);
+            return res.status(500).json({ success: false, message: 'Error marking attendance' });
         }
     }
 }
