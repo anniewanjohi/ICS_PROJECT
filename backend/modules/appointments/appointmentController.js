@@ -359,6 +359,20 @@ class AppointmentController {
                 return res.status(404).json({ success: false, message: 'Appointment not found' });
             }
 
+            // NEW: Check if today is the appointment date - prevents early/late marking
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const appointmentDate = new Date(appointment.appointment_date);
+            appointmentDate.setHours(0, 0, 0, 0);
+
+            if (appointmentDate.getTime() !== today.getTime()) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Attendance can only be marked on the day of the appointment' 
+                });
+            }
+
             if (req.user.role !== 'staff') {
                 return res.status(403).json({ success: false, message: 'Only staff can mark attendance' });
             }
@@ -376,15 +390,25 @@ class AppointmentController {
                 return res.status(400).json({ success: false, message: 'Only confirmed appointments can be marked for attendance' });
             }
 
+            // Check if already marked
+            if (appointment.meeting_status !== 'pending') {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `This appointment is already marked as ${appointment.meeting_status}` 
+                });
+            }
+
             const updated = await AppointmentModel.updateMeetingStatus(parseInt(id), meetingStatus);
 
             const statusText = meetingStatus === 'attended' ? 'attended' : 'missed';
+            
+            // Update notification type to use allowed values
             await NotificationModel.create({
                 userId: appointment.student_user_id,
                 appointmentId: parseInt(id),
                 title: `Appointment ${statusText === 'attended' ? 'Completed' : 'Missed'}`,
                 message: `Your appointment on ${appointment.appointment_date} at ${appointment.start_time} was marked as ${statusText}.`,
-                type: meetingStatus === 'attended' ? 'appointment_completed' : 'appointment_missed'
+                type: 'appointment_confirmed' // Use existing allowed type
             });
 
             await logAction(req.user.userId, `APPOINTMENT_${meetingStatus.toUpperCase()}`, 'appointments', parseInt(id), req);
